@@ -9,7 +9,7 @@ import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
 import { SessionManagerImpl } from '../core/session-manager';
 
-export const CHAT_VIEW_TYPE = 'acp-chat-view-v2';
+export const CHAT_VIEW_TYPE = 'acp-chat-view';
 
 export class ChatView extends ItemView implements ChatInterface {
   private messagesContainer: HTMLElement;
@@ -49,6 +49,11 @@ export class ChatView extends ItemView implements ChatInterface {
 
     this.createChatInterface(container);
     this.setupEventListeners();
+
+    // Proactively try to ensure session if already connected
+    if (this.connectionStatus.connected) {
+      this.ensureSession().catch(err => console.error("Failed to ensure session on open:", err));
+    }
   }
 
   async onClose(): Promise<void> {
@@ -153,23 +158,6 @@ export class ChatView extends ItemView implements ChatInterface {
     // Create main chat layout
     const chatWrapper = container.createDiv('acp-chat-wrapper');
 
-    // Simple header with connection status
-    const headerSection = chatWrapper.createDiv('acp-header-section');
-    
-    // Connection status bar
-    this.statusIndicator = headerSection.createDiv('acp-status-bar');
-    this.updateStatusDisplay();
-
-    // Mode selector
-    const modeContainer = headerSection.createDiv('acp-mode-container');
-    this.modeSelector = modeContainer.createEl('select', {
-      cls: 'acp-mode-selector'
-    });
-    this.modeSelector.addEventListener('change', () => {
-      this.handleModeChange();
-    });
-    this.updateModeSelector();
-
     // Messages container with scrolling
     this.messagesContainer = chatWrapper.createDiv('acp-messages-container');
     this.messagesContainer.addClass('acp-scrollable');
@@ -204,6 +192,16 @@ export class ChatView extends ItemView implements ChatInterface {
     });
 
     this.createQuickAccessDropdown(sendButtonContainer, quickAccessButton);
+
+    // Mode selector under chat input
+    const modeContainer = this.inputContainer.createDiv('acp-mode-container');
+    this.modeSelector = modeContainer.createEl('select', {
+      cls: 'acp-mode-selector'
+    });
+    this.modeSelector.addEventListener('change', () => {
+      this.handleModeChange();
+    });
+    this.updateModeSelector();
 
     // Initially disable input if not connected
     this.updateInputState();
@@ -596,35 +594,19 @@ export class ChatView extends ItemView implements ChatInterface {
 
   showConnectionStatus(status: ConnectionStatus): void {
     this.connectionStatus = status;
-    this.updateStatusDisplay();
     this.updateInputState();
     
     // Reset session if connection status changed
     if (!status.connected && this.currentSessionId) {
       this.currentSessionId = null;
     }
-  }
 
-  private updateStatusDisplay(): void {
-    if (!this.statusIndicator) return;
-
-    this.statusIndicator.empty();
-    
-    const statusIcon = this.statusIndicator.createSpan('acp-status-icon');
-    const statusText = this.statusIndicator.createSpan('acp-status-text');
-
-    if (this.connectionStatus.connected) {
-      statusIcon.addClass('acp-status-connected');
-      statusIcon.textContent = '●';
-      statusText.textContent = `Connected to Kiro`;
-    } else {
-      statusIcon.addClass('acp-status-disconnected');
-      statusIcon.textContent = '●';
-      statusText.textContent = this.connectionStatus.error ? 
-        `Disconnected: ${this.connectionStatus.error}` : 
-        'Disconnected';
+    // Proactively create session if connected
+    if (status.connected && !this.currentSessionId && this.acpClient) {
+      this.ensureSession().catch(err => console.error("Failed to proactively create session:", err));
     }
   }
+
 
   private updateInputState(): void {
     if (!this.inputField || !this.sendButton) return;
@@ -634,7 +616,7 @@ export class ChatView extends ItemView implements ChatInterface {
     this.sendButton.disabled = isDisabled;
 
     if (isDisabled) {
-      this.inputField.placeholder = 'Connect to an AI assistant to start chatting...';
+      this.inputField.placeholder = 'Connect to an AI assistant';
     } else {
       this.inputField.placeholder = 'Type your message here...';
     }

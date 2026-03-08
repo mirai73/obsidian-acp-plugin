@@ -234,18 +234,35 @@ body {
 .acp-mode-container {
   display: flex;
   align-items: center;
+  padding: 0 4px;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.acp-mode-container:hover {
+  opacity: 1;
 }
 
 .acp-mode-selector {
-  background: var(--background-modifier-form-field);
-  border: 1px solid var(--acp-glass-border);
-  border-radius: 4px;
-  color: var(--acp-text-normal);
-  font-size: 11px;
-  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: var(--acp-text-muted);
+  font-size: 8px;
+  padding: 0px;
+  height: 20px;
+  margin: 2px;
+  margin-left: 5px;
+  margin-right: 5px;
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.acp-mode-selector:hover:not(:disabled) {
+  color: var(--acp-primary-color);
 }
 
 .acp-mode-selector:hover:not(:disabled) {

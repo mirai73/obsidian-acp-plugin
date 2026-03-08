@@ -208,6 +208,11 @@ export default class ACPChatPlugin extends Plugin {
 		// Initialize connection status display
 		this.updateChatConnectionStatus();
 
+		// Automatically connect to all enabled agents
+		this.app.workspace.onLayoutReady(async () => {
+			await this.connectAllAgents();
+		});
+
 		console.log("ACP Chat Plugin loaded");
 	}
 
@@ -639,27 +644,37 @@ export default class ACPChatPlugin extends Plugin {
 				color: white;
 			}
 			.agent-details {
-				margin-bottom: 1rem;
-				font-size: 0.9rem;
+				margin-bottom: 0.75rem;
+				font-size: 0.85rem;
 				color: var(--text-muted);
+				line-height: 1.4;
 			}
 			.agent-details div {
 				margin-bottom: 0.25rem;
+				word-break: break-all;
 			}
 			.agent-controls {
 				display: flex;
-				gap: 0.5rem;
+				gap: 0.75rem;
 				align-items: center;
 				flex-wrap: wrap;
+				margin-top: 1rem;
+				padding-top: 0.75rem;
+				border-top: 1px solid var(--background-modifier-border);
 			}
 			.checkbox-container {
 				display: flex;
 				align-items: center;
-				gap: 0.25rem;
+				gap: 0.5rem;
 				cursor: pointer;
+				font-size: 0.9rem;
+				margin-right: 0.5rem;
+				user-select: none;
+				white-space: nowrap;
 			}
 			.checkbox-container input[type="checkbox"] {
 				margin: 0;
+				cursor: pointer;
 			}
 			.connection-status-container {
 				margin: 1rem 0;
@@ -1077,30 +1092,40 @@ class ACPChatSettingTab extends PluginSettingTab {
 			const controlsEl = agentContainer.createDiv("agent-controls");
 			
 			// Enable/Disable toggle
-			const enableToggle = controlsEl.createEl("label", { cls: "checkbox-container" });
-			const checkbox = enableToggle.createEl("input", { type: "checkbox" });
-			checkbox.checked = agent.enabled;
-			console.log('p', agent.enabled)
-			checkbox.addEventListener("change", async () => {
-				agent.enabled = checkbox.checked;
-				console.log(agent.enabled)
+			const toggleContainer = controlsEl.createDiv("checkbox-container");
+			const toggleInput = toggleContainer.createEl("input", { type: "checkbox" });
+			const toggleId = `agent-enable-${agent.id}`;
+			toggleInput.id = toggleId;
+			toggleInput.checked = agent.enabled;
+			
+			const toggleLabel = toggleContainer.createEl("label", { 
+				text: "Enabled",
+				attr: { for: toggleId }
+			});
+			
+			toggleInput.addEventListener("change", async () => {
+				agent.enabled = toggleInput.checked;
 				await this.plugin.saveSettings();
+				// Refresh to reflect changes if necessary
 				this.refreshAgentList(container);
 			});
-			enableToggle.createEl("span", { text: "Enabled" });
 
 			// Connect/Disconnect button
 			const connectButton = controlsEl.createEl("button", { 
 				text: connectionStatus?.connected ? "Disconnect" : "Connect",
-				cls: "mod-cta"
+				cls: connectionStatus?.connected ? "" : "mod-cta"
 			});
 			connectButton.addEventListener("click", async () => {
-				if (connectionStatus?.connected) {
-					await this.plugin.acpClient?.stopAgentById(agent.id);
-				} else {
-					await this.plugin.acpClient?.startAgentWithConfig(agent);
+				connectButton.disabled = true;
+				try {
+					if (connectionStatus?.connected) {
+						await this.plugin.acpClient?.stopAgentById(agent.id);
+					} else {
+						await this.plugin.acpClient?.startAgentWithConfig(agent);
+					}
+				} finally {
+					this.refreshAgentList(container);
 				}
-				this.refreshAgentList(container);
 			});
 
 			// Edit button
