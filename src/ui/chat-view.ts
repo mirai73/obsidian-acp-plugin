@@ -25,6 +25,20 @@ export class ChatView extends ItemView implements ChatInterface {
   private availableModes: any[] = [];
   private currentModeId: string | null = null;
   private modeSelector: HTMLSelectElement | null = null;
+  private commandDropdown: HTMLElement | null = null;
+  private selectedCommandIndex: number = -1;
+  private filteredCommands: any[] = [];
+  private readonly commands = [
+    { text: 'Explain code', command: '/explain' },
+    { text: 'Fix errors', command: '/fix' },
+    { text: 'Add tests', command: '/test' },
+    { text: 'Optimize', command: '/optimize' },
+    { text: 'Document', command: '/document' },
+    { text: 'Refactor', command: '/refactor' },
+    { text: 'File operations', prompt: 'What file operations can you help me with?' },
+    { text: 'Search code', prompt: 'How can you help me search through my codebase?' },
+    { text: 'Web search', prompt: 'How can you help with web search and research?' }
+  ];
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -215,15 +229,48 @@ export class ChatView extends ItemView implements ChatInterface {
 
     // Enter key to send (Shift+Enter for new line)
     this.inputField.addEventListener('keydown', (event) => {
+      // Handle command dropdown navigation
+      if (this.commandDropdown && this.commandDropdown.style.display !== 'none') {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          this.navigateCommandDropdown(1);
+          return;
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          this.navigateCommandDropdown(-1);
+          return;
+        } else if (event.key === 'Enter' || event.key === 'Tab') {
+          if (this.selectedCommandIndex >= 0) {
+            event.preventDefault();
+            this.selectCommand(this.filteredCommands[this.selectedCommandIndex]);
+            return;
+          }
+        } else if (event.key === 'Escape') {
+          this.hideCommandDropdown();
+          return;
+        }
+      }
+
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         this.handleSendMessage();
       }
     });
 
-    // Auto-resize textarea
+    // Handle slash command trigger and filtering
     this.inputField.addEventListener('input', () => {
       this.autoResizeTextarea();
+      
+      const value = this.inputField.value;
+      const cursorPosition = this.inputField.selectionStart;
+      
+      // Check if we just typed a slash at the beginning or after a space
+      if (value.startsWith('/') && cursorPosition <= value.split('\n')[0].length) {
+        const query = value.substring(1).toLowerCase();
+        this.showCommandDropdown(query);
+      } else {
+        this.hideCommandDropdown();
+      }
     });
   }
 
@@ -486,82 +533,54 @@ export class ChatView extends ItemView implements ChatInterface {
    */
   async appendPermissionRequest(params: SessionRequestPermissionParams): Promise<string | null> {
     return new Promise((resolve) => {
-      const messageEl = this.messagesContainer.createDiv('acp-message acp-message-system acp-permission-request');
+      const messageEl = this.messagesContainer.createDiv('acp-message acp-message-system acp-permission-request-compact');
       
-      // Add timestamp if enabled
-      const plugin = (this.app as any).plugins?.plugins?.['acp-chat-plugin'];
-      const settings = plugin?.settings;
-      if (settings?.ui?.showTimestamps !== false) {
-        const timestamp = messageEl.createDiv('acp-message-timestamp');
-        timestamp.textContent = new Date().toLocaleTimeString();
-      }
+      const contentEl = messageEl.createDiv('acp-permission-content-compact');
+      
+      // Icon
+      contentEl.createSpan({ text: '⚠️', cls: 'acp-permission-icon' });
 
-      // Header
-      const headerEl = messageEl.createDiv('acp-permission-header');
-      headerEl.createEl('h4', { text: 'Agent Permission Request' });
+      // Action description (Summary)
+      const summaryText = params.operation && params.resource ? 
+        `${params.operation}: ${params.resource}` : 
+        (params.toolCall?.title || 'Permission Request');
       
-      const contentEl = messageEl.createDiv('acp-permission-content');
-      
-      if (params.toolCall?.title) {
-        const item = contentEl.createDiv('acp-permission-item');
-        item.createSpan({ text: 'Tool: ', cls: 'acp-permission-label' });
-        item.createSpan({ text: params.toolCall.title, cls: 'acp-permission-value' });
-      }
-      
-      if (params.operation) {
-        const item = contentEl.createDiv('acp-permission-item');
-        item.createSpan({ text: 'Operation: ', cls: 'acp-permission-label' });
-        item.createSpan({ text: params.operation, cls: 'acp-permission-value' });
-      }
-      
-      if (params.resource) {
-        const item = contentEl.createDiv('acp-permission-item');
-        item.createSpan({ text: 'Resource: ', cls: 'acp-permission-label' });
-        item.createSpan({ text: params.resource, cls: 'acp-permission-value' });
-      }
-      
+      const summaryEl = contentEl.createSpan({ text: summaryText, cls: 'acp-permission-summary' });
       if (params.reason) {
-        const item = contentEl.createDiv('acp-permission-item');
-        item.createSpan({ text: 'Reason: ', cls: 'acp-permission-label' });
-        item.createSpan({ text: params.reason, cls: 'acp-permission-value' });
+        summaryEl.title = params.reason; // Show reason as tooltip
       }
 
-      // Session info (shortened)
-      const sessionInfo = contentEl.createDiv('acp-permission-session');
-      sessionInfo.createSpan({ text: `Session: ${params.sessionId.substring(0, 8)}...`, cls: 'acp-permission-faint' });
-
-      const optionsContainer = messageEl.createDiv('acp-permission-options');
+      const optionsContainer = contentEl.createDiv('acp-permission-options-compact');
       
       params.options.forEach(option => {
         const btn = optionsContainer.createEl('button', {
           text: option.name,
-          cls: `acp-permission-button ${option.kind.startsWith('allow') ? 'mod-cta' : ''}`
+          cls: `acp-permission-button-compact ${option.kind.startsWith('allow') ? 'mod-cta' : ''}`
         });
         
-        // Add description tooltip or subtext if needed, but let's keep it clean
-        
         btn.addEventListener('click', () => {
-          // Disable all buttons in this request to prevent double-click or future clicks
-          optionsContainer.querySelectorAll('button').forEach(b => (b as HTMLButtonElement).disabled = true);
-          btn.addClass('is-selected');
+          // Hide all buttons in this request
+          optionsContainer.style.display = 'none';
           
           // Add a small indicator of what was selected
-          const selectionIndicator = messageEl.createDiv('acp-permission-selection');
-          selectionIndicator.textContent = `Selected: ${option.name}`;
+          const selectionIndicator = contentEl.createSpan({ cls: 'acp-permission-selection-compact' });
+          selectionIndicator.textContent = `(${option.name})`;
           
           resolve(option.optionId);
         });
       });
 
-      // Add a cancel button if not already in options (though usually it is)
+      // Add a cancel button if not already in options
       const hasCancel = params.options.some(o => o.kind.startsWith('reject'));
       if (!hasCancel) {
         const cancelBtn = optionsContainer.createEl('button', {
           text: 'Cancel',
-          cls: 'acp-permission-button'
+          cls: 'acp-permission-button-compact'
         });
         cancelBtn.addEventListener('click', () => {
-           optionsContainer.querySelectorAll('button').forEach(b => (b as HTMLButtonElement).disabled = true);
+           optionsContainer.style.display = 'none';
+           const selectionIndicator = contentEl.createSpan({ cls: 'acp-permission-selection-compact' });
+           selectionIndicator.textContent = `(Cancelled)`;
            resolve(null);
         });
       }
@@ -679,54 +698,118 @@ export class ChatView extends ItemView implements ChatInterface {
   }
 
   private createQuickAccessDropdown(container: HTMLElement, button: HTMLElement): void {
-    const dropdown = container.createDiv('acp-dropdown');
-    dropdown.style.display = 'none';
+    this.commandDropdown = container.createDiv('acp-dropdown');
+    this.commandDropdown.style.display = 'none';
 
-    const actions = [
-      { icon: '�', text: 'Explain code', command: '/explain' },
-      { icon: '🔧', text: 'Fix errors', command: '/fix' },
-      { icon: '🧪', text: 'Add tests', command: '/test' },
-      { icon: '⚡', text: 'Optimize', command: '/optimize' },
-      { icon: '📚', text: 'Document', command: '/document' },
-      { icon: '🔄', text: 'Refactor', command: '/refactor' },
-      { icon: '📁', text: 'File operations', prompt: 'What file operations can you help me with?' },
-      { icon: '🔍', text: 'Search code', prompt: 'How can you help me search through my codebase?' },
-      { icon: '🌐', text: 'Web search', prompt: 'How can you help with web search and research?' }
-    ];
+    this.renderCommandList(this.commands);
 
-    actions.forEach(action => {
-      const item = dropdown.createDiv('acp-dropdown-item');
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.commandDropdown!.style.display === 'none') {
+        this.showCommandDropdown('');
+      } else {
+        this.hideCommandDropdown();
+      }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (this.commandDropdown && !this.commandDropdown.contains(e.target as Node) && e.target !== button) {
+        this.hideCommandDropdown();
+      }
+    });
+  }
+
+  private showCommandDropdown(query: string): void {
+    if (!this.commandDropdown) return;
+
+    this.filteredCommands = this.commands.filter(cmd => 
+      cmd.text.toLowerCase().includes(query) || 
+      (cmd.command && cmd.command.toLowerCase().includes(query))
+    );
+
+    if (this.filteredCommands.length === 0) {
+      this.hideCommandDropdown();
+      return;
+    }
+
+    this.renderCommandList(this.filteredCommands);
+    this.commandDropdown.style.display = 'block';
+    this.selectedCommandIndex = 0;
+    this.highlightSelectedCommand();
+  }
+
+  private hideCommandDropdown(): void {
+    if (this.commandDropdown) {
+      this.commandDropdown.style.display = 'none';
+      this.selectedCommandIndex = -1;
+    }
+  }
+
+  private renderCommandList(commands: any[]): void {
+    if (!this.commandDropdown) return;
+    
+    this.commandDropdown.empty();
+    commands.forEach((action, index) => {
+      const item = this.commandDropdown!.createDiv('acp-dropdown-item');
       
       const text = item.createSpan('acp-dropdown-text');
       text.textContent = action.text;
 
-      item.addEventListener('click', () => {
-        if (action.command) {
-          this.inputField.value = action.command;
-          this.handleSlashCommand(action.command);
-        } else if (action.prompt) {
-          this.inputField.value = action.prompt;
-          this.autoResizeTextarea();
-          this.inputField.focus();
-        }
-        dropdown.style.display = 'none';
+      if (action.command) {
+        const cmdHint = item.createSpan('acp-dropdown-hint');
+        cmdHint.textContent = action.command;
+        cmdHint.style.marginLeft = 'auto';
+        cmdHint.style.opacity = '0.5';
+        cmdHint.style.fontSize = '0.8em';
+      }
+
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.selectCommand(action);
+      });
+
+      item.addEventListener('mouseenter', () => {
+        this.selectedCommandIndex = index;
+        this.highlightSelectedCommand();
       });
     });
+  }
 
-    let isOpen = false;
-    button.addEventListener('click', (e) => {
-      e.stopPropagation();
-      isOpen = !isOpen;
-      dropdown.style.display = isOpen ? 'block' : 'none';
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', () => {
-      if (isOpen) {
-        dropdown.style.display = 'none';
-        isOpen = false;
+  private highlightSelectedCommand(): void {
+    if (!this.commandDropdown) return;
+    
+    const items = this.commandDropdown.querySelectorAll('.acp-dropdown-item');
+    items.forEach((item, index) => {
+      if (index === this.selectedCommandIndex) {
+        item.addClass('is-selected');
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.removeClass('is-selected');
       }
     });
+  }
+
+  private navigateCommandDropdown(direction: number): void {
+    if (!this.commandDropdown || this.filteredCommands.length === 0) return;
+    
+    this.selectedCommandIndex = (this.selectedCommandIndex + direction + this.filteredCommands.length) % this.filteredCommands.length;
+    this.highlightSelectedCommand();
+  }
+
+  private selectCommand(action: any): void {
+    if (action.command) {
+      this.inputField.value = action.command + ' ';
+      // If we want to auto-execute, we can call handleSlashCommand here
+      // But usually it's better to just fill the input
+      this.handleSlashCommand(action.command);
+    } else if (action.prompt) {
+      this.inputField.value = action.prompt;
+      this.autoResizeTextarea();
+      this.inputField.focus();
+    }
+    this.hideCommandDropdown();
+    this.autoResizeTextarea();
   }
 
 
