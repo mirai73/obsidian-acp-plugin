@@ -10,4 +10,5 @@ export interface ChatInterface {
   getUserInput(): Promise<string>;
   showConnectionStatus(status: ConnectionStatus): void;
   renderMarkdown(content: string): HTMLElement;
+  setMode(modeId: string): Promise<void>;
 }

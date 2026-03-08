@@ -192,10 +192,75 @@ body {
   padding: var(--size-4-2);
 }
 
+/* Header Section */
+.acp-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--acp-background-secondary);
+  border-radius: var(--acp-radius-medium);
+  border: 1px solid var(--acp-glass-border);
+  margin-bottom: 8px;
+}
+
 /* Status Bar with Enhanced Theme Integration */
 .acp-status-bar {
-  display: none;
-  /* Removed as per user request */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-status-icon {
+  font-size: 10px;
+}
+
+.acp-status-connected {
+  color: var(--acp-status-connected-color);
+  text-shadow: 0 0 8px var(--acp-status-connected-color);
+}
+
+.acp-status-disconnected {
+  color: var(--acp-status-disconnected-color);
+}
+
+.acp-status-text {
+  font-size: 11px;
+  color: var(--acp-text-muted);
+  font-weight: 500;
+}
+
+/* Mode Selector Styles */
+.acp-mode-container {
+  display: flex;
+  align-items: center;
+}
+
+.acp-mode-selector {
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--acp-glass-border);
+  border-radius: 4px;
+  color: var(--acp-text-normal);
+  font-size: 11px;
+  padding: 2px 4px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.acp-mode-selector:hover:not(:disabled) {
+  border-color: var(--acp-primary-color);
+  background: var(--background-modifier-hover);
+}
+
+.acp-mode-selector:focus {
+  border-color: var(--acp-primary-color);
+  box-shadow: 0 0 0 2px var(--acp-input-focus-glow);
+}
+
+.acp-mode-selector option {
+  background: var(--background-primary);
+  color: var(--acp-text-normal);
 }
 
 /* Messages Container with Theme Integration */
@@ -349,6 +414,117 @@ body {
   max-width: 70%;
   font-style: italic;
   border-left: 3px solid var(--acp-warning-color);
+}
+
+/* Permission Request Timeline Styles */
+.acp-permission-request {
+  background: var(--acp-background-secondary);
+  border: 1px solid var(--acp-warning-color);
+  border-radius: var(--acp-radius-large);
+  padding: 16px;
+  margin: 8px 0;
+  max-width: 90% !important;
+  align-self: center;
+  box-shadow: 0 4px 12px rgba(var(--acp-warning-color-rgb), 0.1);
+}
+
+.acp-permission-header h4 {
+  margin: 0 0 12px 0;
+  color: var(--acp-text-accent);
+  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-permission-header h4::before {
+  content: '⚠️';
+}
+
+.acp-permission-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.acp-permission-item {
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+.acp-permission-label {
+  font-weight: bold;
+  color: var(--acp-text-muted);
+}
+
+.acp-permission-value {
+  color: var(--acp-text-normal);
+  font-family: var(--acp-font-monospace);
+  background: var(--background-modifier-form-field);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.acp-permission-session {
+  margin-top: 8px;
+}
+
+.acp-permission-faint {
+  font-size: 0.8em;
+  color: var(--acp-text-faint);
+}
+
+.acp-permission-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.acp-permission-button {
+  padding: 6px 12px;
+  border-radius: var(--acp-radius-medium);
+  font-size: 0.85em;
+  cursor: pointer;
+  border: 1px solid var(--acp-border-color);
+  background: var(--acp-background-primary);
+  transition: all 0.2s ease;
+}
+
+.acp-permission-button:hover:not(:disabled) {
+  background: var(--acp-background-secondary);
+  border-color: var(--acp-primary-color);
+}
+
+.acp-permission-button.mod-cta {
+  background: var(--acp-primary-color);
+  color: white;
+  border: none;
+}
+
+.acp-permission-button.mod-cta:hover:not(:disabled) {
+  background: var(--acp-primary-hover);
+}
+
+.acp-permission-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+.acp-permission-button.is-selected {
+  outline: 2px solid var(--acp-primary-color);
+  outline-offset: 2px;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.acp-permission-selection {
+  margin-top: 12px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--acp-primary-color);
+  font-style: italic;
 }
 
 .acp-message-timestamp {

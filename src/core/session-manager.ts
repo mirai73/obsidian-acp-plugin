@@ -12,7 +12,9 @@ import {
   SessionNewResult,
   SessionPromptParams,
   SessionCancelParams,
-  ContentBlock
+  ContentBlock,
+  SessionModeState,
+  SessionSetModeParams
 } from '../types/acp';
 import { JsonRpcClient } from './json-rpc-client';
 import { JsonRpcError, JsonRpcErrorCode } from './acp-method-handlers';
@@ -32,6 +34,7 @@ export interface SessionContext {
   lastActivity: Date;
   status: 'active' | 'cancelled' | 'completed';
   pendingOperations: Set<string>;
+  modes?: SessionModeState;
 }
 
 /**
@@ -106,7 +109,8 @@ export class SessionManagerImpl implements SessionManager {
         createdAt: new Date(),
         lastActivity: new Date(),
         status: 'active',
-        pendingOperations: new Set()
+        pendingOperations: new Set(),
+        modes: result.modes
       };
 
       // Store session using the agent's session ID
@@ -292,6 +296,24 @@ export class SessionManagerImpl implements SessionManager {
         chunkType: update.content?.type,
         chunkLength: update.content?.text?.length || 0
       });
+    } else if (update && update.sessionUpdate === 'current_mode_update') {
+      // Handle mode update
+      if (session.modes) {
+        session.modes.currentModeId = update.modeId;
+      } else {
+        session.modes = {
+          currentModeId: update.modeId,
+          availableModes: []
+        };
+      }
+      console.debug('Received mode update:', {
+        sessionId,
+        modeId: update.modeId
+      });
+      // Optionally notify the UI about mode update
+      if (this.options.onStreamingChunk) {
+        this.options.onStreamingChunk(sessionId, { type: 'mode', modeId: update.modeId });
+      }
     } else {
       // Handle other types of session updates
       console.debug('Received session update:', {
@@ -350,6 +372,39 @@ export class SessionManagerImpl implements SessionManager {
         this.sessions.delete(sessionId);
         console.log(`Cleaned up expired session: ${sessionId}`);
       }
+    }
+  }
+
+  /**
+   * Set the current mode for a session
+   */
+  async setMode(sessionId: string, modeId: string): Promise<void> {
+    const session = this.getSession(sessionId);
+    
+    if (!this.jsonRpcClient) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        'No JSON-RPC client configured'
+      );
+    }
+
+    try {
+      const params: SessionSetModeParams = {
+        sessionId,
+        modeId
+      };
+      await this.jsonRpcClient.sendRequest('session/set_mode', params);
+      
+      if (session.modes) {
+        session.modes.currentModeId = modeId;
+      }
+      
+      session.lastActivity = new Date();
+    } catch (error) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        `Failed to set mode: ${error.message || 'Unknown error'}`
+      );
     }
   }
 

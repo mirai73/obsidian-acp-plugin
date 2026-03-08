@@ -4,12 +4,12 @@
  */
 
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
-import { Message, ConnectionStatus } from '../types/acp';
+import { Message, ConnectionStatus, SessionRequestPermissionParams } from '../types/acp';
 import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
 import { SessionManagerImpl } from '../core/session-manager';
 
-export const CHAT_VIEW_TYPE = 'acp-chat-view';
+export const CHAT_VIEW_TYPE = 'acp-chat-view-v2';
 
 export class ChatView extends ItemView implements ChatInterface {
   private messagesContainer: HTMLElement;
@@ -22,6 +22,9 @@ export class ChatView extends ItemView implements ChatInterface {
   private acpClient: ACPClientImpl | null = null;
   private sessionManager: SessionManagerImpl | null = null;
   private currentSessionId: string | null = null;
+  private availableModes: any[] = [];
+  private currentModeId: string | null = null;
+  private modeSelector: HTMLSelectElement | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -96,6 +99,14 @@ export class ChatView extends ItemView implements ChatInterface {
       console.log({vaultPath})
       const session = await this.sessionManager.createSession(vaultPath);
       this.currentSessionId = session.sessionId;
+      
+      // Store modes from session result
+      const sessionInfo = this.sessionManager.getSessionInfo(this.currentSessionId);
+      if (sessionInfo && sessionInfo.modes) {
+        this.availableModes = sessionInfo.modes.availableModes;
+        this.currentModeId = sessionInfo.modes.currentModeId;
+        this.updateModeSelector();
+      }
     }
 
     return this.currentSessionId;
@@ -148,6 +159,16 @@ export class ChatView extends ItemView implements ChatInterface {
     // Connection status bar
     this.statusIndicator = headerSection.createDiv('acp-status-bar');
     this.updateStatusDisplay();
+
+    // Mode selector
+    const modeContainer = headerSection.createDiv('acp-mode-container');
+    this.modeSelector = modeContainer.createEl('select', {
+      cls: 'acp-mode-selector'
+    });
+    this.modeSelector.addEventListener('change', () => {
+      this.handleModeChange();
+    });
+    this.updateModeSelector();
 
     // Messages container with scrolling
     this.messagesContainer = chatWrapper.createDiv('acp-messages-container');
@@ -305,6 +326,17 @@ export class ChatView extends ItemView implements ChatInterface {
         if (helpToggle) {
           helpToggle.click();
         }
+        return;
+      case cmd.startsWith('/mode'):
+        const parts = cmd.split(' ');
+        if (parts.length > 1) {
+          this.setMode(parts[1]);
+        } else {
+          this.displayMessage({
+            role: 'system',
+            content: [{ type: 'text', text: `Available modes: ${this.availableModes.map(m => m.id).join(', ')}` }]
+          });
+        }
         this.inputField.value = '';
         return;
       default:
@@ -325,7 +357,15 @@ export class ChatView extends ItemView implements ChatInterface {
    * Handle streaming message chunks from the agent
    */
   private handleStreamingChunk(sessionId: string, chunk: any): void {
-    if (!chunk || chunk.type !== 'text' || !chunk.text) {
+    if (!chunk) return;
+
+    if (chunk.type === 'mode') {
+      this.currentModeId = chunk.modeId;
+      this.updateModeSelector();
+      return;
+    }
+
+    if (chunk.type !== 'text' || !chunk.text) {
       return;
     }
 
@@ -443,6 +483,95 @@ export class ChatView extends ItemView implements ChatInterface {
     this.scrollToBottom();
   }
 
+  /**
+   * Append a permission request to the chat timeline
+   */
+  async appendPermissionRequest(params: SessionRequestPermissionParams): Promise<string | null> {
+    return new Promise((resolve) => {
+      const messageEl = this.messagesContainer.createDiv('acp-message acp-message-system acp-permission-request');
+      
+      // Add timestamp if enabled
+      const plugin = (this.app as any).plugins?.plugins?.['acp-chat-plugin'];
+      const settings = plugin?.settings;
+      if (settings?.ui?.showTimestamps !== false) {
+        const timestamp = messageEl.createDiv('acp-message-timestamp');
+        timestamp.textContent = new Date().toLocaleTimeString();
+      }
+
+      // Header
+      const headerEl = messageEl.createDiv('acp-permission-header');
+      headerEl.createEl('h4', { text: 'Agent Permission Request' });
+      
+      const contentEl = messageEl.createDiv('acp-permission-content');
+      
+      if (params.toolCall?.title) {
+        const item = contentEl.createDiv('acp-permission-item');
+        item.createSpan({ text: 'Tool: ', cls: 'acp-permission-label' });
+        item.createSpan({ text: params.toolCall.title, cls: 'acp-permission-value' });
+      }
+      
+      if (params.operation) {
+        const item = contentEl.createDiv('acp-permission-item');
+        item.createSpan({ text: 'Operation: ', cls: 'acp-permission-label' });
+        item.createSpan({ text: params.operation, cls: 'acp-permission-value' });
+      }
+      
+      if (params.resource) {
+        const item = contentEl.createDiv('acp-permission-item');
+        item.createSpan({ text: 'Resource: ', cls: 'acp-permission-label' });
+        item.createSpan({ text: params.resource, cls: 'acp-permission-value' });
+      }
+      
+      if (params.reason) {
+        const item = contentEl.createDiv('acp-permission-item');
+        item.createSpan({ text: 'Reason: ', cls: 'acp-permission-label' });
+        item.createSpan({ text: params.reason, cls: 'acp-permission-value' });
+      }
+
+      // Session info (shortened)
+      const sessionInfo = contentEl.createDiv('acp-permission-session');
+      sessionInfo.createSpan({ text: `Session: ${params.sessionId.substring(0, 8)}...`, cls: 'acp-permission-faint' });
+
+      const optionsContainer = messageEl.createDiv('acp-permission-options');
+      
+      params.options.forEach(option => {
+        const btn = optionsContainer.createEl('button', {
+          text: option.name,
+          cls: `acp-permission-button ${option.kind.startsWith('allow') ? 'mod-cta' : ''}`
+        });
+        
+        // Add description tooltip or subtext if needed, but let's keep it clean
+        
+        btn.addEventListener('click', () => {
+          // Disable all buttons in this request to prevent double-click or future clicks
+          optionsContainer.querySelectorAll('button').forEach(b => (b as HTMLButtonElement).disabled = true);
+          btn.addClass('is-selected');
+          
+          // Add a small indicator of what was selected
+          const selectionIndicator = messageEl.createDiv('acp-permission-selection');
+          selectionIndicator.textContent = `Selected: ${option.name}`;
+          
+          resolve(option.optionId);
+        });
+      });
+
+      // Add a cancel button if not already in options (though usually it is)
+      const hasCancel = params.options.some(o => o.kind.startsWith('reject'));
+      if (!hasCancel) {
+        const cancelBtn = optionsContainer.createEl('button', {
+          text: 'Cancel',
+          cls: 'acp-permission-button'
+        });
+        cancelBtn.addEventListener('click', () => {
+           optionsContainer.querySelectorAll('button').forEach(b => (b as HTMLButtonElement).disabled = true);
+           resolve(null);
+        });
+      }
+
+      this.scrollToBottom();
+    });
+  }
+
   private renderMarkdownContent(content: string, container: HTMLElement): void {
     // Use Obsidian's markdown renderer
     MarkdownRenderer.renderMarkdown(
@@ -508,6 +637,62 @@ export class ChatView extends ItemView implements ChatInterface {
       this.inputField.placeholder = 'Connect to an AI assistant to start chatting...';
     } else {
       this.inputField.placeholder = 'Type your message here...';
+    }
+  }
+
+  private updateModeSelector(): void {
+    if (!this.modeSelector) return;
+
+    this.modeSelector.empty();
+    
+    if (this.availableModes.length === 0) {
+      this.modeSelector.style.display = 'none';
+      return;
+    }
+
+    this.modeSelector.style.display = 'block';
+    
+    this.availableModes.forEach(mode => {
+      const option = this.modeSelector?.createEl('option', {
+        text: mode.name,
+        value: mode.id
+      });
+      if (option && mode.id === this.currentModeId) {
+        option.selected = true;
+      }
+    });
+
+    // Disable selector if not connected
+    this.modeSelector.disabled = !this.connectionStatus.connected;
+  }
+
+  private async handleModeChange(): Promise<void> {
+    if (!this.modeSelector || !this.sessionManager || !this.currentSessionId) return;
+    
+    const newModeId = this.modeSelector.value;
+    try {
+      await this.sessionManager.setMode(this.currentSessionId, newModeId);
+      this.currentModeId = newModeId;
+      console.log(`Switched to mode: ${newModeId}`);
+    } catch (error) {
+      console.error('Failed to change mode:', error);
+      // Revert selector to current mode
+      this.updateModeSelector();
+    }
+  }
+
+  async setMode(modeId: string): Promise<void> {
+    const mode = this.availableModes.find(m => m.id === modeId || m.name.toLowerCase() === modeId.toLowerCase());
+    if (mode) {
+      if (this.modeSelector) {
+        this.modeSelector.value = mode.id;
+        await this.handleModeChange();
+      }
+    } else {
+      this.displayMessage({
+        role: 'system',
+        content: [{ type: 'text', text: `Unknown mode: ${modeId}. Available modes: ${this.availableModes.map(m => m.id).join(', ')}` }]
+      });
     }
   }
 

@@ -71,14 +71,7 @@ export interface SessionNewParams {
 
 export interface SessionNewResult {
   sessionId: string;
-  modes?: {
-    currentModeId: string;
-    availableModes: Array<{
-      id: string;
-      name: string;
-      description: string;
-    }>;
-  };
+  modes?: SessionModeState;
   models?: {
     currentModelId: string;
     availableModels: Array<{
@@ -87,6 +80,22 @@ export interface SessionNewResult {
       description: string;
     }>;
   };
+}
+
+export interface SessionModeState {
+  currentModeId: string;
+  availableModes: SessionMode[];
+}
+
+export interface SessionMode {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface SessionSetModeParams {
+  sessionId: string;
+  modeId: string;
 }
 
 export interface Message {
@@ -155,12 +164,14 @@ export interface SessionRequestPermissionResult {
 // Session updates (notifications)
 export interface SessionUpdateParams {
   sessionId: string;
-  type: "message" | "status" | "error";
-  data: any;
+  update: {
+    sessionUpdate: string;
+    [key: string]: any;
+  };
 }
 
 export interface SessionUpdate {
-  type: "message" | "status" | "error";
+  type: "message" | "status" | "error" | "mode";
   data: any;
 }
 

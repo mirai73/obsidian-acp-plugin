@@ -10,4 +10,5 @@ export interface SessionManager {
   sendPrompt(sessionId: string, messages: Message[]): Promise<PromptResult>;
   cancelSession(sessionId: string): Promise<void>;
   updateSession(sessionId: string, update: SessionUpdate): void;
+  setMode(sessionId: string, modeId: string): Promise<void>;
 }
