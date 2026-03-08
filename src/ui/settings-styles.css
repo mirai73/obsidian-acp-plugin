@@ -1,0 +1,192 @@
+/* ACP Chat Plugin Settings Styles */
+
+.agent-list-container {
+  margin: 1rem 0;
+}
+
+.agent-item {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: var(--background-secondary);
+}
+
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.agent-header h4 {
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.agent-status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.status-connected {
+  background: var(--color-green);
+  color: white;
+}
+
+.status-connecting {
+  background: var(--color-yellow);
+  color: var(--text-on-accent);
+}
+
+.status-disconnected {
+  background: var(--color-red);
+  color: white;
+}
+
+.status-error {
+  background: var(--color-red);
+  color: white;
+}
+
+.agent-details {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.agent-details div {
+  margin-bottom: 0.25rem;
+}
+
+.agent-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.checkbox-container input[type="checkbox"] {
+  margin: 0;
+}
+
+.connection-status-container {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.connection-status-container h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-normal);
+}
+
+.connection-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  background: var(--background-primary);
+  border-radius: 4px;
+}
+
+.status-name {
+  font-weight: 500;
+  min-width: 120px;
+}
+
+.status-indicator {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  min-width: 80px;
+  text-align: center;
+}
+
+.status-time {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Modal styles */
+.modal-button-container {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.setting-item {
+  margin-bottom: 1rem;
+}
+
+.setting-item-name {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.setting-item-description {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.setting-item input[type="text"],
+.setting-item textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-interface);
+}
+
+.setting-item textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .agent-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .agent-controls button {
+    width: 100%;
+  }
+  
+  .status-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+  
+  .status-time {
+    margin-left: 0;
+  }
+}

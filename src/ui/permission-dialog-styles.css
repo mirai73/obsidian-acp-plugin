@@ -1,0 +1,137 @@
+/* Permission Dialog Styles */
+
+.acp-permission-dialog {
+  max-width: 500px;
+  padding: 20px;
+}
+
+.acp-permission-dialog h2 {
+  margin-bottom: 16px;
+  color: var(--text-normal);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 8px;
+}
+
+.permission-details {
+  background: var(--background-secondary);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.permission-details p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.permission-tool-title {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.permission-operation {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+
+.permission-resource {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  word-break: break-all;
+}
+
+.permission-reason {
+  color: var(--text-normal);
+  font-style: italic;
+}
+
+.permission-session {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-family: var(--font-monospace);
+}
+
+.permission-options {
+  margin-bottom: 20px;
+}
+
+.permission-options h3 {
+  margin-bottom: 12px;
+  color: var(--text-normal);
+  font-size: 16px;
+}
+
+.permission-option {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.permission-option:hover {
+  background: var(--background-modifier-hover);
+}
+
+.permission-option input[type="radio"] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.permission-option label {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.permission-option-description {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.permission-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.permission-buttons button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.permission-buttons button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.permission-buttons button.mod-cta {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.permission-buttons button.mod-cta:hover {
+  background: var(--interactive-accent-hover);
+}
+
+/* Dark theme adjustments */
+.theme-dark .permission-details {
+  background: var(--background-secondary-alt);
+}
+
+/* Light theme adjustments */
+.theme-light .permission-details {
+  background: var(--background-secondary);
+}

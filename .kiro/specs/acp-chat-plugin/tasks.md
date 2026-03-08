@@ -1,0 +1,306 @@
+# Implementation Plan: ACP Chat Plugin
+
+## Overview
+
+This implementation plan creates an Obsidian plugin that implements the Agent Client Protocol (ACP) specification, enabling AI coding assistants to integrate with Obsidian through a standardized JSON-RPC 2.0 interface. The plugin provides a chat interface and secure file operations within the vault boundaries.
+
+## Tasks
+
+- [-] 1. Set up Obsidian plugin structure and core interfaces
+  - Create plugin manifest and basic TypeScript structure
+  - Define core TypeScript interfaces for ACP protocol
+  - Set up build configuration and development environment
+  - Configure testing framework with Jest and fast-check
+  - _Requirements: 8.1, 8.2_
+
+- [x] 2. Implement JSON-RPC 2.0 protocol foundation
+  - [x] 2.1 Create JSON-RPC message types and serialization
+    - Implement JsonRpcRequest, JsonRpcResponse, JsonRpcNotification interfaces
+    - Create message serialization and deserialization functions
+    - Add JSON-RPC error code constants and error handling
+    - _Requirements: 1.1, 1.3, 1.4_
+  
+  - [ ]* 2.2 Write property test for JSON-RPC message handling
+    - **Property 4: Invalid Message Error Handling**
+    - **Validates: Requirements 1.4**
+  
+  - [x] 2.3 Implement bidirectional message routing
+    - Create message dispatcher for incoming method calls
+    - Implement request/response correlation tracking
+    - Add notification handling for one-way messages
+    - _Requirements: 1.3_
+  
+  - [ ]* 2.4 Write unit tests for message routing
+    - Test method dispatch to correct handlers
+    - Test request/response correlation
+    - Test notification processing
+    - _Requirements: 1.3_
+
+- [x] 3. Implement child process management for ACP agents
+  - [x] 3.1 Create agent process lifecycle management
+    - Implement process spawning with stdio transport
+    - Add process monitoring and health checks
+    - Create graceful shutdown and cleanup procedures
+    - _Requirements: 5.1, 5.3, 5.4_
+  
+  - [x] 3.2 Implement stdio communication layer
+    - Create stdin/stdout message streaming
+    - Add message framing and buffering
+    - Implement connection state tracking
+    - _Requirements: 1.2, 5.4_
+  
+  - [ ]* 3.3 Write property test for connection management
+    - **Property 12: Connection Status Tracking**
+    - **Validates: Requirements 4.7, 5.4**
+  
+  - [ ]* 3.4 Write unit tests for process management
+    - Test process startup and shutdown
+    - Test error handling for failed processes
+    - Test connection recovery scenarios
+    - _Requirements: 5.3, 7.6_
+
+- [ ] 4. Checkpoint - Ensure basic protocol communication works
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Implement ACP Client Component
+  - [x] 5.1 Create ACPClient class with core methods
+    - Implement startAgent and stopAgent methods
+    - Create sendRequest and sendNotification methods
+    - Add method handler registration system
+    - _Requirements: 1.1, 1.2_
+  
+  - [ ]* 5.2 Write property test for ACP method implementation
+    - **Property 1: ACP Method Implementation Completeness**
+    - **Validates: Requirements 1.1**
+  
+  - [x] 5.3 Implement session establishment and capabilities
+    - Add initialize method handler for agent startup
+    - Implement capabilities negotiation
+    - Create session tracking and management
+    - _Requirements: 1.2, 1.5_
+  
+  - [ ]* 5.4 Write property test for session establishment
+    - **Property 2: Session Establishment**
+    - **Validates: Requirements 1.2**
+
+- [x] 6. Implement File Operations Handler
+  - [x] 6.1 Create FileOperationsHandler class
+    - Implement readTextFile method with vault boundary checks
+    - Add writeTextFile method with directory creation
+    - Create path validation and security enforcement
+    - _Requirements: 2.1, 2.2, 2.3, 2.5, 3.1, 3.4_
+  
+  - [ ]* 6.2 Write property test for file read operations
+    - **Property 5: File Read Round Trip**
+    - **Validates: Requirements 2.1, 2.2, 2.3**
+  
+  - [x] 6.3 Implement ACP fs/read_text_file method handler
+    - Connect FileOperationsHandler to ACP protocol
+    - Add proper error handling and JSON-RPC error codes
+    - Implement file encoding preservation
+    - _Requirements: 2.1, 2.4, 2.6_
+  
+  - [ ]* 6.4 Write property test for file access boundaries
+    - **Property 6: File Access Boundary Enforcement**
+    - **Validates: Requirements 2.5**
+  
+  - [x] 6.5 Implement ACP fs/write_text_file method handler
+    - Connect write operations to ACP protocol
+    - Add file creation and directory handling
+    - Trigger Obsidian file change notifications
+    - _Requirements: 3.1, 3.2, 3.4, 3.7_
+  
+  - [ ]* 6.6 Write property test for file write operations
+    - **Property 7: File Write Round Trip**
+    - **Validates: Requirements 3.1, 3.2, 3.3**
+  
+  - [ ]* 6.7 Write property test for directory creation
+    - **Property 8: Directory Creation on Write**
+    - **Validates: Requirements 3.4**
+
+- [ ] 7. Implement Permission Manager
+  - [x] 7.1 Create PermissionManager class
+    - Implement permission checking and enforcement
+    - Add operation logging for audit trails
+    - Create permission revocation system
+    - _Requirements: 6.2, 6.4, 6.6_
+  
+  - [x] 7.2 Implement ACP session/request_permission method
+    - Connect permission requests to user interface
+    - Add permission dialog and user confirmation
+    - Store and track granted permissions
+    - _Requirements: 6.1, 6.5_
+  
+  - [ ]* 7.3 Write property test for permission enforcement
+    - **Property 9: Permission Enforcement**
+    - **Validates: Requirements 6.2, 6.3, 6.5**
+  
+  - [ ]* 7.4 Write property test for operation logging
+    - **Property 10: Operation Logging**
+    - **Validates: Requirements 6.4, 6.5**
+
+- [x] 8. Implement Session Manager
+  - [x] 8.1 Create SessionManager class
+    - Implement session lifecycle management
+    - Add conversation context tracking
+    - Create session cancellation handling
+    - _Requirements: 4.3, 4.4_
+  
+  - [x] 8.2 Implement ACP session methods
+    - Add session/new method handler
+    - Implement session/prompt method with message handling
+    - Create session/cancel method for operation cancellation
+    - _Requirements: 4.3, 4.4_
+  
+  - [ ]* 8.3 Write property test for session message handling
+    - **Property 11: Session Message Handling**
+    - **Validates: Requirements 4.3, 4.4**
+  
+  - [x] 8.4 Implement session/update notification handler
+    - Handle session status updates from agents
+    - Process message updates and conversation flow
+    - Add error handling for session operations
+    - _Requirements: 4.4_
+
+- [ ] 9. Checkpoint - Ensure core ACP protocol implementation works
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 10. Implement Chat Interface Component
+  - [x] 10.1 Create chat panel UI structure
+    - Design dockable panel layout for Obsidian
+    - Create message display area with scrolling
+    - Add input field and send button
+    - _Requirements: 4.1, 4.6_
+  
+  - [x] 10.2 Implement message rendering and display
+    - Add markdown rendering for assistant responses
+    - Create timestamp display for conversation history
+    - Implement message formatting and styling
+    - _Requirements: 4.2, 4.5_
+  
+  - [x] 10.3 Connect chat interface to ACP protocol
+    - Wire user input to session/prompt calls
+    - Display agent responses in conversation
+    - Add connection status indicators
+    - _Requirements: 4.3, 4.4, 4.7_
+  
+  - [ ]* 10.4 Write unit tests for chat interface
+    - Test message display and formatting
+    - Test user input handling
+    - Test connection status updates
+    - _Requirements: 4.1, 4.2, 4.7_
+
+- [x] 11. Implement plugin settings and configuration
+  - [x] 11.1 Create settings interface for agent configuration
+    - Design settings tab for agent management
+    - Add agent configuration forms (command, args, environment)
+    - Implement agent enable/disable controls
+    - _Requirements: 5.1, 5.2_
+  
+  - [x] 11.2 Implement permission configuration UI
+    - Add file access permission controls
+    - Create allowed/denied path configuration
+    - Implement permission confirmation settings
+    - _Requirements: 6.1, 6.3_
+  
+  - [x] 11.3 Add connection management features
+    - Implement connection status display
+    - Add manual connect/disconnect controls
+    - Create reconnection configuration options
+    - _Requirements: 5.4, 5.6_
+
+- [x] 12. Implement Obsidian integration features
+  - [x] 12.1 Add command palette integration
+    - Register plugin commands for chat operations
+    - Add keyboard shortcuts for common actions
+    - Implement ribbon icon for quick access
+    - _Requirements: 8.3, 8.4_
+  
+  - [x] 12.2 Integrate with Obsidian's undo/redo system
+    - Hook file modifications into undo stack
+    - Preserve file operation history
+    - Add proper change tracking
+    - _Requirements: 8.5_
+  
+  - [x] 12.3 Implement theme integration
+    - Respect Obsidian's theme system for UI components
+    - Add CSS variables for consistent styling
+    - Ensure proper dark/light mode support
+    - _Requirements: 8.2_
+
+- [x] 13. Implement comprehensive error handling
+  - [x] 13.1 Add JSON-RPC error handling
+    - Implement all standard JSON-RPC error codes
+    - Add ACP-specific error codes and messages
+    - Create user-friendly error display
+    - _Requirements: 7.1, 7.2, 7.3_
+  
+  - [x] 13.2 Implement connection error recovery
+    - Add automatic reconnection with exponential backoff
+    - Handle network timeouts gracefully
+    - Implement connection failure notifications
+    - _Requirements: 7.5, 7.6_
+  
+  - [ ]* 13.3 Write property test for error recovery
+    - **Property 14: Error Recovery**
+    - **Validates: Requirements 7.6**
+  
+  - [x] 13.4 Add comprehensive logging system
+    - Implement debug logging for troubleshooting
+    - Add operation audit logs
+    - Create log level configuration
+    - _Requirements: 7.1, 7.4_
+
+- [ ] 14. Implement multi-connection support
+  - [-] 14.1 Add support for multiple simultaneous agents
+    - Extend session management for multiple connections
+    - Implement agent selection in chat interface
+    - Add per-agent configuration and state tracking
+    - _Requirements: 5.2_
+  
+  - [ ]* 14.2 Write property test for multi-connection independence
+    - **Property 13: Multi-Connection Independence**
+    - **Validates: Requirements 5.2**
+  
+  - [ ] 14.3 Implement agent switching and management
+    - Add UI for switching between active agents
+    - Create agent status monitoring
+    - Implement per-agent conversation history
+    - _Requirements: 5.2, 5.4_
+
+- [ ] 15. Final integration and testing
+  - [ ] 15.1 Integrate all components into main plugin class
+    - Wire all handlers and managers together
+    - Implement plugin lifecycle methods (onload, onunload)
+    - Add proper cleanup and resource management
+    - _Requirements: 8.1_
+  
+  - [ ]* 15.2 Write property test for Obsidian integration compliance
+    - **Property 15: Obsidian Integration Compliance**
+    - **Validates: Requirements 8.1, 8.3, 8.5**
+  
+  - [ ] 15.3 Create comprehensive integration tests
+    - Test full ACP protocol flows with mock agents
+    - Verify file operations with various vault configurations
+    - Test error scenarios and recovery mechanisms
+    - _Requirements: 1.1, 2.1, 3.1, 7.6_
+  
+  - [ ]* 15.4 Write end-to-end property tests
+    - Test complete user workflows with generated scenarios
+    - Verify protocol compliance across all operations
+    - Test concurrent operations and edge cases
+    - _Requirements: 1.1, 5.2, 6.2_
+
+- [ ] 16. Final checkpoint - Ensure complete system works
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for faster MVP
+- Each task references specific requirements for traceability
+- Property tests validate universal correctness properties using fast-check
+- Unit tests validate specific examples and edge cases
+- Checkpoints ensure incremental validation throughout development
+- TypeScript implementation provides type safety and better developer experience
+- All file operations are restricted to vault boundaries for security
+- JSON-RPC 2.0 compliance ensures compatibility with ACP specification
