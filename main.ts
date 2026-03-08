@@ -46,8 +46,8 @@ export default class ACPChatPlugin extends Plugin {
 			showNotifications: this.settings.ui?.showFileOperationNotifications ?? false
 		});
 
-		// Initialize ACP client
-		this.acpClient = new ACPClientImpl();
+		// Initialize ACP client with reasonable timeout
+		this.acpClient = new ACPClientImpl({ requestTimeout: 30000 });
 
 		// Set up file operations handlers using the Obsidian-integrated handler
 		this.acpClient.setFsReadTextFileHandler(async (params) => {
@@ -73,15 +73,19 @@ export default class ACPChatPlugin extends Plugin {
 		});
 
 		// Register chat view
-		this.registerView(
-			CHAT_VIEW_TYPE,
-			(leaf) => {
-				this.chatView = new ChatView(leaf);
-				// Connect the chat view to the ACP client
-				this.chatView.setACPClient(this.acpClient);
-				return this.chatView;
-			}
-		);
+		try {
+			this.registerView(
+				CHAT_VIEW_TYPE,
+				(leaf) => {
+					this.chatView = new ChatView(leaf);
+					// Connect the chat view to the ACP client
+					this.chatView.setACPClient(this.acpClient);
+					return this.chatView;
+				}
+			);
+		} catch (e) {
+			console.warn("ACP View registration skip (already registered):", e);
+		}
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
@@ -475,7 +479,36 @@ export default class ACPChatPlugin extends Plugin {
 				};
 			}
 
-			// Show permission dialog to user
+			// Ensure chat view is open and revealed
+			if (!this.chatView) {
+				await this.openChatView();
+			}
+
+			if (this.chatView) {
+				// Reveal the leaf
+				this.app.workspace.revealLeaf(this.chatView.leaf);
+				
+				// Show permission in chat timeline
+				const selectedOptionId = await this.chatView.appendPermissionRequest(params);
+
+				if (selectedOptionId === null) {
+					// User cancelled
+					return {
+						outcome: {
+							outcome: 'cancelled'
+						}
+					};
+				}
+
+				return {
+					outcome: {
+						outcome: 'selected',
+						optionId: selectedOptionId
+					}
+				};
+			}
+
+			// Fallback to modal if chat view is somehow unavailable
 			const dialog = new PermissionDialog(this.app, {
 				sessionId: params.sessionId,
 				toolCall: params.toolCall,
@@ -485,10 +518,9 @@ export default class ACPChatPlugin extends Plugin {
 				reason: params.reason
 			});
 
-			const selectedOptionId = await dialog.showAndWait();
+			const selectedId = await dialog.showAndWait();
 
-			if (selectedOptionId === null) {
-				// User cancelled
+			if (selectedId === null) {
 				return {
 					outcome: {
 						outcome: 'cancelled'
@@ -499,7 +531,7 @@ export default class ACPChatPlugin extends Plugin {
 			return {
 				outcome: {
 					outcome: 'selected',
-					optionId: selectedOptionId
+					optionId: selectedId
 				}
 			};
 
