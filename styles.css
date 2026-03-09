@@ -280,6 +280,109 @@ body {
   color: var(--acp-text-normal);
 }
 
+/* New Selectors Row */
+.acp-selectors-row {
+  display: flex;
+  gap: 12px;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+}
+
+.acp-selector-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acp-selector-label {
+  font-size: 10px;
+  color: var(--acp-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.acp-agent-selector,
+.acp-mode-selector {
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--acp-glass-border);
+  border-radius: 4px;
+  color: var(--acp-text-muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.acp-agent-selector:hover:not(:disabled),
+.acp-mode-selector:hover:not(:disabled) {
+  color: var(--acp-text-normal);
+  border-color: var(--acp-primary-color);
+  background: var(--background-modifier-hover);
+}
+
+/* Document Context Box */
+.acp-document-box {
+  display: none;
+  /* Shown via JS */
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(var(--color-accent-rgb), 0.05);
+  border: 1px dashed var(--acp-primary-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin: 2px 0 6px 0;
+  gap: 8px;
+}
+
+.acp-document-info {
+  display: block;
+  overflow: hidden;
+}
+
+.acp-document-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--acp-text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acp-document-add-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--acp-primary-color);
+  background: transparent;
+  color: var(--acp-primary-color);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.acp-document-add-btn:hover {
+  background: var(--acp-primary-color);
+  color: white;
+}
+
+.acp-document-add-btn.is-added {
+  background: var(--acp-error-color);
+  border-color: var(--acp-error-color);
+  color: white;
+}
+
+.acp-document-add-btn.is-added:hover {
+  background: var(--color-red-hover);
+  border-color: var(--color-red-hover);
+}
+
 /* Messages Container with Theme Integration */
 .acp-messages-container {
   flex: 1;

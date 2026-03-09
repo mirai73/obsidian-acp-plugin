@@ -3,7 +3,7 @@
  * Implements the dockable chat panel for Obsidian using ItemView
  */
 
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon } from 'obsidian';
 import { Message, ConnectionStatus, SessionRequestPermissionParams } from '../types/acp';
 import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
@@ -25,6 +25,11 @@ export class ChatView extends ItemView implements ChatInterface {
   private availableModes: any[] = [];
   private currentModeId: string | null = null;
   private modeSelector: HTMLSelectElement | null = null;
+  private agentSelector: HTMLSelectElement | null = null;
+  private currentAgentId: string | null = null;
+  private documentContextBox: HTMLElement | null = null;
+  private activeFile: any | null = null;
+  private isDocumentAddedToContext: boolean = false;
   private commandDropdown: HTMLElement | null = null;
   private selectedCommandIndex: number = -1;
   private filteredCommands: any[] = [];
@@ -63,6 +68,16 @@ export class ChatView extends ItemView implements ChatInterface {
 
     this.createChatInterface(container);
     this.setupEventListeners();
+    
+    // Track active file from Obsidian
+    this.registerEvent(
+      this.app.workspace.on('file-open', (file) => {
+        this.activeFile = file;
+        this.updateDocumentContextBox();
+      })
+    );
+    this.activeFile = this.app.workspace.getActiveFile();
+    this.updateDocumentContextBox();
 
     // Proactively try to ensure session if already connected
     if (this.connectionStatus.connected) {
@@ -103,11 +118,6 @@ export class ChatView extends ItemView implements ChatInterface {
       throw new Error('No connected agents available');
     }
 
-    // Check if the connection is properly initialized
-    if (!this.acpClient.isConnectionInitialized()) {
-      throw new Error('Agent connection not initialized. Please ensure the agent supports ACP protocol.');
-    }
-
     // Set the JSON-RPC client on the session manager
     this.sessionManager.setJsonRpcClient(jsonRpcClient);
 
@@ -136,8 +146,17 @@ export class ChatView extends ItemView implements ChatInterface {
       return null;
     }
 
-    // Get the first available connection
-    const connection = (this.acpClient as any).getFirstAvailableConnection();
+    // Use the selected agent or the first available one
+    let connection;
+    if (this.currentAgentId) {
+      const connections = (this.acpClient as any).connections;
+      connection = connections?.get(this.currentAgentId);
+    }
+    
+    if (!connection) {
+      connection = (this.acpClient as any).getFirstAvailableConnection();
+    }
+    
     return connection?.jsonRpcClient || null;
   }
   /**
@@ -166,6 +185,8 @@ export class ChatView extends ItemView implements ChatInterface {
     } else {
       this.showConnectionStatus({ connected: false });
     }
+
+    this.updateAgentSelector();
   }
 
   private createChatInterface(container: Element): void {
@@ -179,6 +200,35 @@ export class ChatView extends ItemView implements ChatInterface {
     // Clean input container
     this.inputContainer = chatWrapper.createDiv('acp-input-container');
     
+    // Selection row (Agent and Auto/Modality)
+    const selectorsRow = this.inputContainer.createDiv('acp-selectors-row');
+    
+    // Agent dropdown
+    const agentContainer = selectorsRow.createDiv('acp-selector-wrapper');
+    agentContainer.createSpan({ text: 'Agent:', cls: 'acp-selector-label' });
+    this.agentSelector = agentContainer.createEl('select', {
+      cls: 'acp-agent-selector'
+    });
+    this.agentSelector.addEventListener('change', () => {
+      this.currentAgentId = this.agentSelector!.value;
+      this.updateAgentSelector(); // Re-sync session if needed
+      this.currentSessionId = null; // Reset session when switching agent
+    });
+
+    // Auto/Mode selector
+    const modalityContainer = selectorsRow.createDiv('acp-selector-wrapper');
+    modalityContainer.createSpan({ text: 'Mode:', cls: 'acp-selector-label' });
+    this.modeSelector = modalityContainer.createEl('select', {
+      cls: 'acp-mode-selector'
+    });
+    this.modeSelector.addEventListener('change', () => {
+      this.handleModeChange();
+    });
+
+    // Document Context Box above chat input
+    this.documentContextBox = this.inputContainer.createDiv('acp-document-box');
+    this.updateDocumentContextBox();
+
     // Input row with text area and enhanced send button
     const inputRow = this.inputContainer.createDiv('acp-input-row');
     
@@ -195,29 +245,20 @@ export class ChatView extends ItemView implements ChatInterface {
     const sendButtonContainer = inputRow.createDiv('acp-send-container');
     
     this.sendButton = sendButtonContainer.createEl('button', {
-      cls: 'acp-send-button',
-      text: '→'
+      cls: 'acp-send-button'
     });
+    setIcon(this.sendButton, 'send');
 
     // Quick access dropdown
     const quickAccessButton = sendButtonContainer.createEl('button', {
-      cls: 'acp-quick-access-button',
-      text: '⚡'
+      cls: 'acp-quick-access-button'
     });
+    setIcon(quickAccessButton, 'zap');
 
     this.createQuickAccessDropdown(sendButtonContainer, quickAccessButton);
 
-    // Mode selector under chat input
-    const modeContainer = this.inputContainer.createDiv('acp-mode-container');
-    this.modeSelector = modeContainer.createEl('select', {
-      cls: 'acp-mode-selector'
-    });
-    this.modeSelector.addEventListener('change', () => {
-      this.handleModeChange();
-    });
     this.updateModeSelector();
-
-    // Initially disable input if not connected
+    this.updateAgentSelector();
     this.updateInputState();
   }
 
@@ -296,9 +337,16 @@ export class ChatView extends ItemView implements ChatInterface {
     this.autoResizeTextarea();
 
     // Create user message
+    let finalPrompt = text;
+    
+    // Prepend document context if added and it's the first message
+    if (this.isDocumentAddedToContext && this.activeFile && this.messageHistory.length === 0) {
+      finalPrompt = `Current document: ${this.activeFile.path}\n\n${text}`;
+    }
+
     const userMessage: Message = {
       role: 'user',
-      content: [{ type: 'text', text }]
+      content: [{ type: 'text', text: finalPrompt }]
     };
 
     // Display user message
@@ -538,7 +586,7 @@ export class ChatView extends ItemView implements ChatInterface {
       const contentEl = messageEl.createDiv('acp-permission-content-compact');
       
       // Icon
-      contentEl.createSpan({ text: '⚠️', cls: 'acp-permission-icon' });
+      setIcon(contentEl.createSpan({ cls: 'acp-permission-icon' }), 'alert-triangle');
 
       // Action description (Summary)
       const summaryText = params.operation && params.resource ? 
@@ -638,6 +686,64 @@ export class ChatView extends ItemView implements ChatInterface {
       this.inputField.placeholder = 'Connect to an AI assistant';
     } else {
       this.inputField.placeholder = 'Type your message here...';
+    }
+    
+    if (this.agentSelector) this.agentSelector.disabled = isDisabled;
+    if (this.modeSelector) this.modeSelector.disabled = isDisabled;
+  }
+
+  private updateDocumentContextBox(): void {
+    if (!this.documentContextBox) return;
+
+    this.documentContextBox.empty();
+
+    if (!this.activeFile) {
+      this.documentContextBox.style.display = 'none';
+      return;
+    }
+
+    this.documentContextBox.style.display = 'flex';
+    
+    const info = this.documentContextBox.createDiv('acp-document-info');
+    info.createSpan({ text: this.activeFile.name, cls: 'acp-document-name' });
+
+    const btn = this.documentContextBox.createEl('button', {
+      cls: `acp-document-add-btn ${this.isDocumentAddedToContext ? 'is-added' : ''}`
+    });
+    setIcon(btn, this.isDocumentAddedToContext ? 'x' : 'plus');
+
+    btn.addEventListener('click', () => {
+      this.isDocumentAddedToContext = !this.isDocumentAddedToContext;
+      this.updateDocumentContextBox();
+    });
+  }
+
+  private updateAgentSelector(): void {
+    if (!this.agentSelector || !this.acpClient) return;
+
+    const connectedAgentIds = this.acpClient.getConnectedAgents();
+    
+    this.agentSelector.empty();
+    
+    if (connectedAgentIds.length === 0) {
+      this.agentSelector.createEl('option', { text: 'No agents connected', value: '' });
+      this.currentAgentId = null;
+      return;
+    }
+
+    connectedAgentIds.forEach(id => {
+      const status = this.acpClient!.getConnectionStatus(id);
+      const option = this.agentSelector?.createEl('option', {
+        text: status.agentName || id,
+        value: id
+      });
+      if (option && id === this.currentAgentId) {
+        option.selected = true;
+      }
+    });
+
+    if (!this.currentAgentId && connectedAgentIds.length > 0) {
+      this.currentAgentId = connectedAgentIds[0];
     }
   }
 
