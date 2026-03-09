@@ -3,11 +3,11 @@
  * Implements the dockable chat panel for Obsidian using ItemView
  */
 
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon, SuggestModal, App, Notice } from 'obsidian';
 import { Message, ConnectionStatus, SessionRequestPermissionParams } from '../types/acp';
 import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
-import { SessionManagerImpl } from '../core/session-manager';
+import { SessionManagerImpl, SessionContext } from '../core/session-manager';
 
 export const CHAT_VIEW_TYPE = 'acp-chat-view';
 
@@ -193,6 +193,25 @@ export class ChatView extends ItemView implements ChatInterface {
     // Create main chat layout
     const chatWrapper = container.createDiv('acp-chat-wrapper');
 
+    // Header section for session management
+    const header = chatWrapper.createDiv('acp-chat-header');
+    
+    // New Session button
+    const newSessionBtn = header.createEl('button', {
+      cls: 'acp-header-btn',
+      title: 'New Conversation'
+    });
+    setIcon(newSessionBtn, 'plus-circle');
+    newSessionBtn.addEventListener('click', () => this.startNewConversation());
+
+    // Session History button
+    const historyBtn = header.createEl('button', {
+      cls: 'acp-header-btn',
+      title: 'Session History'
+    });
+    setIcon(historyBtn, 'history');
+    historyBtn.addEventListener('click', () => this.showSessionHistory());
+
     // Messages container with scrolling
     this.messagesContainer = chatWrapper.createDiv('acp-messages-container');
     this.messagesContainer.addClass('acp-scrollable');
@@ -200,6 +219,24 @@ export class ChatView extends ItemView implements ChatInterface {
     // Clean input container
     this.inputContainer = chatWrapper.createDiv('acp-input-container');
     
+    
+
+    // Document Context Box above chat input
+    this.documentContextBox = this.inputContainer.createDiv('acp-document-box');
+    this.updateDocumentContextBox();
+
+    // Input row with text area and enhanced send button
+    const inputRow = this.inputContainer.createDiv('acp-input-row');
+    
+    // Text input area
+    this.inputField = inputRow.createEl('textarea', {
+      cls: 'acp-input-field',
+      attr: {
+        placeholder: 'Ask me anything about your code, files, or development tasks...',
+        rows: '1'
+      }
+    });
+
     // Selection row (Agent and Auto/Modality)
     const selectorsRow = this.inputContainer.createDiv('acp-selectors-row');
     
@@ -224,38 +261,15 @@ export class ChatView extends ItemView implements ChatInterface {
     this.modeSelector.addEventListener('change', () => {
       this.handleModeChange();
     });
-
-    // Document Context Box above chat input
-    this.documentContextBox = this.inputContainer.createDiv('acp-document-box');
-    this.updateDocumentContextBox();
-
-    // Input row with text area and enhanced send button
-    const inputRow = this.inputContainer.createDiv('acp-input-row');
-    
-    // Text input area
-    this.inputField = inputRow.createEl('textarea', {
-      cls: 'acp-input-field',
-      attr: {
-        placeholder: 'Ask me anything about your code, files, or development tasks...',
-        rows: '1'
-      }
-    });
-
     // Enhanced send button with dropdown
     const sendButtonContainer = inputRow.createDiv('acp-send-container');
     
-    this.sendButton = sendButtonContainer.createEl('button', {
+    this.sendButton = selectorsRow.createEl('button', {
       cls: 'acp-send-button'
     });
-    setIcon(this.sendButton, 'send');
+    setIcon(this.sendButton, 'arrow-right');
 
-    // Quick access dropdown
-    const quickAccessButton = sendButtonContainer.createEl('button', {
-      cls: 'acp-quick-access-button'
-    });
-    setIcon(quickAccessButton, 'zap');
-
-    this.createQuickAccessDropdown(sendButtonContainer, quickAccessButton);
+    this.createCommandDropdown(sendButtonContainer);
 
     this.updateModeSelector();
     this.updateAgentSelector();
@@ -301,6 +315,7 @@ export class ChatView extends ItemView implements ChatInterface {
     // Handle slash command trigger and filtering
     this.inputField.addEventListener('input', () => {
       this.autoResizeTextarea();
+      this.updateInputState();
       
       const value = this.inputField.value;
       const cursorPosition = this.inputField.selectionStart;
@@ -335,6 +350,7 @@ export class ChatView extends ItemView implements ChatInterface {
     // Clear input
     this.inputField.value = '';
     this.autoResizeTextarea();
+    this.updateInputState();
 
     // Create user message
     let finalPrompt = text;
@@ -344,13 +360,18 @@ export class ChatView extends ItemView implements ChatInterface {
       finalPrompt = `Current document: ${this.activeFile.path}\n\n${text}`;
     }
 
-    const userMessage: Message = {
+    const userMessageForAgent: Message = {
       role: 'user',
       content: [{ type: 'text', text: finalPrompt }]
     };
 
-    // Display user message
-    this.displayMessage(userMessage);
+    const userMessageForUI: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: text }]
+    };
+
+    // Display user message in UI (this stores the 'clean' version in history)
+    this.displayMessage(userMessageForUI);
 
     // Send message via ACP protocol
     try {
@@ -359,8 +380,8 @@ export class ChatView extends ItemView implements ChatInterface {
       }
 
       const sessionId = await this.ensureSession();
-      console.log({userMessage});
-      const result = await this.sessionManager.sendPrompt(sessionId, [userMessage]);
+      console.log({userMessageForAgent});
+      const result = await this.sessionManager.sendPrompt(sessionId, [userMessageForAgent]);
       console.log({result})
       
       // Finalize any streaming message that was being displayed
@@ -467,14 +488,10 @@ export class ChatView extends ItemView implements ChatInterface {
     
     if (!streamingContainer) {
       // Create new streaming message container
-      streamingContainer = document.createElement('div');
-      streamingContainer.className = 'message assistant-message streaming-message';
+      streamingContainer = this.messagesContainer.createDiv('acp-message acp-message-assistant streaming-message');
       
-      const messageContent = document.createElement('div');
+      const messageContent = streamingContainer.createDiv('acp-message-content');
       messageContent.className = 'message-content';
-      streamingContainer.appendChild(messageContent);
-      
-      this.messagesContainer?.appendChild(streamingContainer);
     }
 
     // Append the chunk text to the streaming message
@@ -581,6 +598,10 @@ export class ChatView extends ItemView implements ChatInterface {
    */
   async appendPermissionRequest(params: SessionRequestPermissionParams): Promise<string | null> {
     return new Promise((resolve) => {
+      // Finalize any active streaming part so the permission request block 
+      // is inserted in the correct chronological position within the flow.
+      this.finalizeStreamingMessage();
+
       const messageEl = this.messagesContainer.createDiv('acp-message acp-message-system acp-permission-request-compact');
       
       const contentEl = messageEl.createDiv('acp-permission-content-compact');
@@ -678,18 +699,20 @@ export class ChatView extends ItemView implements ChatInterface {
   private updateInputState(): void {
     if (!this.inputField || !this.sendButton) return;
 
-    const isDisabled = !this.connectionStatus.connected;
-    this.inputField.disabled = isDisabled;
-    this.sendButton.disabled = isDisabled;
+    const isDisconnected = !this.connectionStatus.connected;
+    const isInputEmpty = !this.inputField.value.trim();
+    
+    this.inputField.disabled = isDisconnected;
+    this.sendButton.disabled = isDisconnected || isInputEmpty;
 
-    if (isDisabled) {
+    if (isDisconnected) {
       this.inputField.placeholder = 'Connect to an AI assistant';
     } else {
       this.inputField.placeholder = 'Type your message here...';
     }
     
-    if (this.agentSelector) this.agentSelector.disabled = isDisabled;
-    if (this.modeSelector) this.modeSelector.disabled = isDisabled;
+    if (this.agentSelector) this.agentSelector.disabled = isDisconnected;
+    if (this.modeSelector) this.modeSelector.disabled = isDisconnected;
   }
 
   private updateDocumentContextBox(): void {
@@ -803,24 +826,15 @@ export class ChatView extends ItemView implements ChatInterface {
     }
   }
 
-  private createQuickAccessDropdown(container: HTMLElement, button: HTMLElement): void {
+  private createCommandDropdown(container: HTMLElement): void {
     this.commandDropdown = container.createDiv('acp-dropdown');
     this.commandDropdown.style.display = 'none';
 
     this.renderCommandList(this.commands);
 
-    button.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (this.commandDropdown!.style.display === 'none') {
-        this.showCommandDropdown('');
-      } else {
-        this.hideCommandDropdown();
-      }
-    });
-
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-      if (this.commandDropdown && !this.commandDropdown.contains(e.target as Node) && e.target !== button) {
+      if (this.commandDropdown && !this.commandDropdown.contains(e.target as Node)) {
         this.hideCommandDropdown();
       }
     });
@@ -922,6 +936,53 @@ export class ChatView extends ItemView implements ChatInterface {
 
 
 
+  private async startNewConversation(): Promise<void> {
+    this.currentSessionId = null;
+    this.messageHistory = [];
+    this.messagesContainer.empty();
+    await this.ensureSession();
+    new Notice('Started new conversation');
+  }
+
+  private showSessionHistory(): void {
+    if (!this.sessionManager) return;
+    
+    const sessions = this.sessionManager.getActiveSessions();
+    if (sessions.length === 0) {
+      new Notice('No past conversations found');
+      return;
+    }
+
+    const modal = new SessionSuggestModal(this.app, sessions, (sessionId) => this.loadSession(sessionId));
+    modal.open();
+  }
+
+  private async loadSession(sessionId: string): Promise<void> {
+    if (!this.sessionManager) return;
+    
+    const session = this.sessionManager.getSessionInfo(sessionId);
+    if (!session) return;
+
+    this.currentSessionId = sessionId;
+    this.messageHistory = []; // Reset locally and rebuild from session
+    this.messagesContainer.empty();
+
+    // Re-render all messages from session
+    session.messages.forEach(msg => {
+      const displayMsg = this.cleanMessageForDisplay(msg);
+      this.displayMessage(displayMsg);
+    });
+
+    // Update modes
+    if (session.modes) {
+      this.availableModes = session.modes.availableModes;
+      this.currentModeId = session.modes.currentModeId;
+      this.updateModeSelector();
+    }
+
+    new Notice('Switched to conversation');
+  }
+
   private scrollToBottom(): void {
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
@@ -938,5 +999,71 @@ export class ChatView extends ItemView implements ChatInterface {
 
   focusInput(): void {
     this.inputField?.focus();
+  }
+
+  /**
+   * Cleans a message for UI display only (e.g. stripping context preambles)
+   */
+  private cleanMessageForDisplay(message: Message): Message {
+    if (message.role !== 'user') return message;
+    
+    return {
+      ...message,
+      content: message.content.map(block => {
+        if (block.type === 'text' && block.text) {
+          return {
+            ...block,
+            text: block.text.replace(/^Current document: .*\n\n/, '')
+          };
+        }
+        return block;
+      })
+    };
+  }
+}
+
+/**
+ * Modal to suggest and switch between active sessions
+ */
+class SessionSuggestModal extends SuggestModal<SessionContext> {
+  private sessions: SessionContext[];
+  private onSelect: (sessionId: string) => void;
+
+  constructor(app: App, sessions: SessionContext[], onSelect: (sessionId: string) => void) {
+    super(app);
+    this.sessions = sessions.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+    this.onSelect = onSelect;
+  }
+
+  getSuggestions(query: string): SessionContext[] {
+    return this.sessions.filter((session) => {
+      const firstMsg = this.getSessionPreview(session);
+      return session.sessionId.toLowerCase().includes(query.toLowerCase()) || 
+             firstMsg.toLowerCase().includes(query.toLowerCase());
+    });
+  }
+
+  renderSuggestion(session: SessionContext, el: HTMLElement) {
+    const preview = this.getSessionPreview(session);
+    const container = el.createDiv('acp-session-suggestion');
+    container.createDiv({ text: preview, cls: "acp-session-title" });
+    const meta = container.createDiv('acp-session-meta');
+    meta.createSpan({ text: session.lastActivity.toLocaleString(), cls: "acp-session-time" });
+    meta.createSpan({ text: ` | ID: ${session.sessionId.substring(0, 8)}...`, cls: "acp-session-id" });
+  }
+
+  onChooseSuggestion(session: SessionContext, evt: MouseEvent | KeyboardEvent) {
+    this.onSelect(session.sessionId);
+  }
+
+  private getSessionPreview(session: SessionContext): string {
+    const firstUserMsg = session.messages.find(m => m.role === 'user');
+    if (!firstUserMsg || !firstUserMsg.content || firstUserMsg.content.length === 0) return 'Empty Conversation';
+    
+    let text = firstUserMsg.content.find(c => c.type === 'text')?.text || 'Untitled Session';
+    // Clean preview text
+    text = text.replace(/^Current document: .*\n\n/, '');
+    
+    return text.substring(0, 60) + (text.length > 60 ? '...' : '');
   }
 }

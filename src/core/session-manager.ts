@@ -172,7 +172,13 @@ export class SessionManagerImpl implements SessionManager {
       
       // Add agent response to session context
       if (result && result.message) {
-        session.messages.push(result.message);
+        const lastMsg = session.messages[session.messages.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') {
+          // Replace accumulated streaming message with final result
+          session.messages[session.messages.length - 1] = result.message;
+        } else {
+          session.messages.push(result.message);
+        }
       }
 
       // Remove operation from pending
@@ -285,17 +291,32 @@ export class SessionManagerImpl implements SessionManager {
     session.lastActivity = new Date();
 
     // Handle agent_message_chunk for streaming responses
-    if (update && update.sessionUpdate === 'agent_message_chunk') {
+    if (update && update.sessionUpdate === 'agent_message_chunk' && update.content) {
+      // Accumulate in session history
+      let lastMsg = session.messages[session.messages.length - 1];
+      if (!lastMsg || lastMsg.role !== 'assistant') {
+        lastMsg = { role: 'assistant', content: [] };
+        session.messages.push(lastMsg);
+      }
+
+      // Append chunk to the last assistant message
+      if (update.content.type === 'text' && update.content.text) {
+        const lastBlock = lastMsg.content[lastMsg.content.length - 1];
+        if (lastBlock && lastBlock.type === 'text') {
+          lastBlock.text += update.content.text;
+        } else {
+          lastMsg.content.push({ type: 'text', text: update.content.text });
+        }
+      } else {
+        lastMsg.content.push(update.content);
+      }
+
       // Forward the chunk to the UI callback if available
       if (this.options.onStreamingChunk) {
         this.options.onStreamingChunk(sessionId, update.content);
       }
       
-      console.debug('Received streaming chunk:', {
-        sessionId,
-        chunkType: update.content?.type,
-        chunkLength: update.content?.text?.length || 0
-      });
+      console.debug('Received streaming chunk (accumulated)');
     } else if (update && update.sessionUpdate === 'current_mode_update') {
       // Handle mode update
       if (session.modes) {
