@@ -941,6 +941,7 @@ export class ChatView extends ItemView implements ChatInterface {
     this.messageHistory = [];
     this.messagesContainer.empty();
     await this.ensureSession();
+    this.scrollToBottom();
     new Notice('Started new conversation');
   }
 
@@ -980,6 +981,7 @@ export class ChatView extends ItemView implements ChatInterface {
       this.updateModeSelector();
     }
 
+    this.scrollToBottom();
     new Notice('Switched to conversation');
   }
 
