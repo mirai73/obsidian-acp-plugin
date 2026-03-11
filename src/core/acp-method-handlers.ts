@@ -284,25 +284,10 @@ export class ACPSessionHandlers {
 
       // Request permission through permission manager
       // Extract kind and resource from toolCall if available
-      const kind = params.toolCall.kind || 'unknown';
-      const resource = params.toolCall.path || params.toolCall.resource || 'unknown';
-      const reason = params.toolCall.title || undefined;
       console.log('permission request', {params})
-      const result = await this.permissionManager.requestPermission(
-        kind,
-        resource,
-        reason,
-        params.sessionId
-      );
+      const result = await this.permissionManager.requestPermission(params);
 
-      // For now, return a simple granted/denied result
-      // This will be enhanced when we integrate with the UI dialog
-      return {
-        outcome: {
-          outcome: 'selected',
-          optionId: result ? 'allow_once' : 'reject_once'
-        }
-      };
+      return result;
 
     } catch (error) {
       // Map permission errors to JSON-RPC errors

@@ -162,10 +162,9 @@ describe('SessionManager', () => {
 
     it('should throw error when no JSON-RPC client configured', async () => {
       const sessionManagerWithoutClient = new SessionManagerImpl();
-      const session = await sessionManagerWithoutClient.createSession();
       
       await expect(
-        sessionManagerWithoutClient.sendPrompt(session.sessionId, testMessages)
+        sessionManagerWithoutClient.sendPrompt('fake-session', testMessages)
       ).rejects.toThrow(JsonRpcError);
       
       // Clean up the session manager to prevent Jest open handles

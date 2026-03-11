@@ -1,9 +1,5 @@
-/**
- * Permission Manager Implementation
- * Handles user permission requests, access control, and audit logging
- */
-
 import { PermissionManager } from '../interfaces/permission-manager';
+import { SessionRequestPermissionParams, SessionRequestPermissionResult } from '../types/acp';
 
 export interface PermissionConfig {
   allowedPaths: string[];
@@ -20,26 +16,18 @@ export interface PermissionEntry {
   sessionId?: string;
 }
 
-export interface PermissionRequest {
-  operation: string;
-  resource: string;
-  reason?: string;
-  sessionId?: string;
-}
-
 /**
  * Permission Manager Implementation
  * Manages file access permissions, user confirmations, and audit logging
  */
 export class PermissionManagerImpl implements PermissionManager {
   private config: PermissionConfig;
-  private grantedPermissions: Map<string, Set<string>> = new Map(); // sessionId -> Set<operation:resource>
   private operationLog: PermissionEntry[] = [];
-  private userConfirmationHandler?: (request: PermissionRequest) => Promise<boolean>;
+  private userConfirmationHandler?: (params: SessionRequestPermissionParams) => Promise<SessionRequestPermissionResult>;
 
   constructor(
     config: PermissionConfig,
-    userConfirmationHandler?: (request: PermissionRequest) => Promise<boolean>
+    userConfirmationHandler?: (params: SessionRequestPermissionParams) => Promise<SessionRequestPermissionResult>
   ) {
     this.config = config;
     this.userConfirmationHandler = userConfirmationHandler;
@@ -47,96 +35,38 @@ export class PermissionManagerImpl implements PermissionManager {
 
   /**
    * Request permission for an operation on a resource
-   * Shows user confirmation dialog if required
+   * Delegates entirely to the user confirmation handler UI
    */
-  async requestPermission(
-    operation: string, 
-    resource: string, 
-    reason?: string,
-    sessionId?: string
-  ): Promise<boolean> {
-    const request: PermissionRequest = {
-      operation,
-      resource,
-      reason,
-      sessionId
-    };
+  async requestPermission(params: SessionRequestPermissionParams): Promise<SessionRequestPermissionResult> {
+    const operation = params.toolCall.kind || 'unknown';
+    // Handle either old format (path/resource directly) or new format (locations)
+    const resource = (params.toolCall.locations && params.toolCall.locations.length > 0 ? params.toolCall.locations[0].path : null) 
+      || params.toolCall.path || params.toolCall.resource || 'unknown';
 
-    // Check if permission is already granted for this session
-    if (sessionId && this.hasSessionPermission(sessionId, operation, resource)) {
-      this.logOperation(operation, resource, true);
-      return true;
+    if (!this.userConfirmationHandler) {
+       console.warn('No user confirmation handler registered; cancelling permission request.');
+       this.logOperation(operation, resource, false);
+       return { outcome: { outcome: 'cancelled' } };
     }
 
-    // Check against denied paths first
-    if (this.isResourceDenied(resource)) {
-      this.logOperation(operation, resource, false);
-      return false;
-    }
-
-    // Check against allowed paths
-    if (!this.isResourceAllowed(resource)) {
-      this.logOperation(operation, resource, false);
-      return false;
-    }
-
-    let granted = true;
-
-    // Request user confirmation if required
-    if (this.config.requireConfirmation && this.userConfirmationHandler) {
-      try {
-        granted = await this.userConfirmationHandler(request);
-      } catch (error) {
-        console.error('Error requesting user confirmation:', error);
-        granted = false;
-      }
-    }
-
-    // Store granted permission for the session
-    if (granted && sessionId) {
-      this.grantSessionPermission(sessionId, operation, resource);
-    }
-
-    this.logOperation(operation, resource, granted);
-    return granted;
-  }
-
-  /**
-   * Check if permission is already granted for an operation on a resource
-   */
-  checkPermission(operation: string, resource: string, sessionId?: string): boolean {
-    // Check session-specific permissions first
-    if (sessionId && this.hasSessionPermission(sessionId, operation, resource)) {
-      return true;
-    }
-
-    // Check against denied paths
-    if (this.isResourceDenied(resource)) {
-      return false;
-    }
-
-    // Check against allowed paths
-    if (!this.isResourceAllowed(resource)) {
-      return false;
-    }
-
-    // If no confirmation required, permission is granted
-    return !this.config.requireConfirmation;
-  }
-
-  /**
-   * Revoke all permissions for a session
-   */
-  revokePermissions(sessionId: string): void {
-    const permissions = this.grantedPermissions.get(sessionId);
-    if (permissions) {
-      // Log revocation of each permission
-      for (const permissionKey of permissions) {
-        const [operation, resource] = permissionKey.split(':', 2);
-        this.logOperation(`revoke_${operation}`, resource, true);
-      }
+    try {
+      const result = await this.userConfirmationHandler(params);
       
-      this.grantedPermissions.delete(sessionId);
+      // Best-effort attempt to log whether the operation was "granted"
+      let granted = false;
+      if (result.outcome.outcome === 'selected' && result.outcome.optionId) {
+         const selectedOption = params.options.find(o => o.optionId === result.outcome.optionId);
+         if (selectedOption && selectedOption.kind.startsWith('allow')) {
+             granted = true;
+         }
+      }
+
+      this.logOperation(operation, resource, granted);
+      return result;
+    } catch (error) {
+      console.error('Error requesting user confirmation:', error);
+      this.logOperation(operation, resource, false);
+      return { outcome: { outcome: 'cancelled' } };
     }
   }
 
@@ -185,31 +115,11 @@ export class PermissionManagerImpl implements PermissionManager {
   /**
    * Set user confirmation handler
    */
-  setUserConfirmationHandler(handler: (request: PermissionRequest) => Promise<boolean>): void {
+  setUserConfirmationHandler(handler: (params: SessionRequestPermissionParams) => Promise<SessionRequestPermissionResult>): void {
     this.userConfirmationHandler = handler;
   }
 
   // Private helper methods
-
-  private hasSessionPermission(sessionId: string, operation: string, resource: string): boolean {
-    const permissions = this.grantedPermissions.get(sessionId);
-    if (!permissions) {
-      return false;
-    }
-    
-    const permissionKey = `${operation}:${resource}`;
-    return permissions.has(permissionKey);
-  }
-
-  private grantSessionPermission(sessionId: string, operation: string, resource: string): void {
-    if (!this.grantedPermissions.has(sessionId)) {
-      this.grantedPermissions.set(sessionId, new Set());
-    }
-    
-    const permissions = this.grantedPermissions.get(sessionId)!;
-    const permissionKey = `${operation}:${resource}`;
-    permissions.add(permissionKey);
-  }
 
   private isResourceAllowed(resource: string): boolean {
     // If no allowed paths configured, allow all

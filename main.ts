@@ -15,6 +15,8 @@ import { ACPClientImpl } from './src/core/acp-client-impl';
 import { ObsidianFileOperationsHandler } from './src/core/obsidian-file-operations';
 import { ThemeManager, ThemeConfig } from './src/ui/theme-manager';
 import { PermissionDialog } from './src/ui/permission-dialog';
+import { PermissionManagerImpl } from './src/core/permission-manager';
+import { ACPSessionHandlers } from './src/core/acp-method-handlers';
 
 export default class ACPChatPlugin extends Plugin {
 	settings: PluginSettings;
@@ -68,8 +70,22 @@ export default class ACPChatPlugin extends Plugin {
 		});
 
 		// Set up permission handler
+		const permissionManager = new PermissionManagerImpl(
+			{
+				allowedPaths: this.settings.permissions?.allowedPaths || [],
+				deniedPaths: this.settings.permissions?.deniedPaths || [],
+				requireConfirmation: this.settings.permissions?.showPermissionDialog !== false,
+				logOperations: true // Configured to true by default for auditing
+			},
+			async (params) => {
+				return await this.userConfirmationHandler(params);
+			}
+		);
+		
+		const acpSessionHandlers = new ACPSessionHandlers(permissionManager);
+		
 		this.acpClient.setSessionRequestPermissionHandler(async (params) => {
-			return await this.handlePermissionRequest(params);
+			return await acpSessionHandlers.handleSessionRequestPermission(params);
 		});
 
 		// Register chat view
@@ -471,7 +487,7 @@ export default class ACPChatPlugin extends Plugin {
 	/**
 	 * Handle permission requests from agents
 	 */
-	async handlePermissionRequest(params: SessionRequestPermissionParams): Promise<SessionRequestPermissionResult> {
+	async userConfirmationHandler(params: SessionRequestPermissionParams): Promise<SessionRequestPermissionResult> {
 		try {
 			// Check if permission dialogs are enabled
 			if (!this.settings.permissions?.showPermissionDialog) {
