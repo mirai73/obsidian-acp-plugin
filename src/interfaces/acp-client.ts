@@ -19,4 +19,6 @@ export interface ACPClient {
   handleFsWriteTextFile(params: FsWriteTextFileParams): Promise<void>;
   handleSessionRequestPermission(params: SessionRequestPermissionParams): Promise<SessionRequestPermissionResult>;
   handleSessionUpdate(params: SessionUpdateParams): void;
+  
+  getSessionManager(): any | undefined;
 }

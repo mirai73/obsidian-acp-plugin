@@ -479,6 +479,16 @@ export class ChatView extends ItemView implements ChatInterface {
       return;
     }
 
+    if (chunk.type === 'tool_call') {
+      this.displayToolCall(chunk);
+      return;
+    }
+
+    if (chunk.type === 'tool_call_update') {
+      this.updateToolCallDisplay(chunk);
+      return;
+    }
+
     if (chunk.type !== 'text' || !chunk.text) {
       return;
     }
@@ -594,6 +604,75 @@ export class ChatView extends ItemView implements ChatInterface {
   }
 
   /**
+   * Display a new tool call in the chat
+   */
+  private displayToolCall(chunk: any): void {
+    this.finalizeStreamingMessage();
+    
+    // Create tool call container
+    const toolCallId = chunk.toolCallId;
+    
+    // check if it already exists
+    if (this.messagesContainer.querySelector(`#tool-call-${toolCallId}`)) {
+      return;
+    }
+
+    const messageEl = this.messagesContainer.createDiv('acp-message acp-message-system acp-permission-request-compact');
+    messageEl.id = `tool-call-${toolCallId}`;
+    
+    const contentEl = messageEl.createDiv('acp-permission-content-compact');
+    
+    // Icon based on status
+    const iconSpan = contentEl.createSpan({ cls: 'acp-permission-icon' });
+    setIcon(iconSpan, 'loader');
+    
+    const titleEl = contentEl.createSpan({ text: chunk.title || `Tool: ${chunk.kind || 'Unknown'}`, cls: 'acp-permission-summary' });
+    
+    this.scrollToBottom();
+  }
+
+  /**
+   * Update an existing tool call in the chat
+   */
+  private updateToolCallDisplay(chunk: any): void {
+    const toolCallId = chunk.toolCallId;
+    const messageEl = this.messagesContainer.querySelector(`#tool-call-${toolCallId}`) as HTMLElement;
+    
+    if (!messageEl) {
+      // If we don't have it for some reason, create it
+      this.displayToolCall(chunk);
+      return;
+    }
+    
+    const contentEl = messageEl.querySelector('.acp-permission-content-compact') as HTMLElement;
+    const iconSpan = contentEl.querySelector('.acp-permission-icon') as HTMLElement;
+    const titleEl = contentEl.querySelector('.acp-permission-summary') as HTMLElement;
+    
+    if (chunk.title) {
+        titleEl.textContent = chunk.title;
+    }
+
+    if (chunk.status) {
+      iconSpan.empty();
+      
+      switch (chunk.status) {
+        case 'pending':
+          setIcon(iconSpan, 'loader');
+          break;
+        case 'in_progress':
+          setIcon(iconSpan, 'play-circle');
+          break;
+        case 'completed':
+          setIcon(iconSpan, 'check-circle');
+          break;
+        case 'failed':
+          setIcon(iconSpan, 'x-circle');
+          break;
+      }
+    }
+  }
+
+  /**
    * Append a permission request to the chat timeline
    */
   async appendPermissionRequest(params: SessionRequestPermissionParams): Promise<string | null> {
@@ -609,14 +688,25 @@ export class ChatView extends ItemView implements ChatInterface {
       // Icon
       setIcon(contentEl.createSpan({ cls: 'acp-permission-icon' }), 'alert-triangle');
 
+      // Fetch full tool call context from session manager if available
+      let fullToolCall = undefined;
+      if (this.sessionManager) {
+        const session = this.sessionManager.getSessionInfo(params.sessionId);
+        if (session && session.toolCalls) {
+          fullToolCall = session.toolCalls.get(params.toolCall.toolCallId);
+        }
+      }
+
       // Action description (Summary)
-      const summaryText = params.operation && params.resource ? 
-        `${params.operation}: ${params.resource}` : 
-        (params.toolCall?.title || 'Permission Request');
+      const kind = fullToolCall?.kind || params.toolCall.kind || 'access';
+      const resource = (fullToolCall?.locations && fullToolCall.locations.length > 0 ? fullToolCall.locations[0].path : null) || params.toolCall.path || params.toolCall.resource || 'unknown';
+      const title = fullToolCall?.title || params.toolCall.title || 'Permission Request';
       
+      const summaryText = `${kind}: ${resource}`;
       const summaryEl = contentEl.createSpan({ text: summaryText, cls: 'acp-permission-summary' });
-      if (params.reason) {
-        summaryEl.title = params.reason; // Show reason as tooltip
+      
+      if (title) {
+        summaryEl.title = title; // Show title as tooltip
       }
 
       const optionsContainer = contentEl.createDiv('acp-permission-options-compact');

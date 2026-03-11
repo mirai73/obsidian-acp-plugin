@@ -49,12 +49,12 @@ describe('FileOperationsHandler', () => {
 
     it('should throw error for non-existent file', async () => {
       await expect(handler.readTextFile('nonexistent.md'))
-        .rejects.toThrow('File not found');
+        .rejects.toThrow('could not be found');
     });
 
     it('should enforce vault boundaries', async () => {
       await expect(handler.readTextFile('../outside.md'))
-        .rejects.toThrow('outside vault boundaries');
+        .rejects.toThrow('outside your vault');
     });
 
     it('should validate file extensions', async () => {
@@ -64,7 +64,7 @@ describe('FileOperationsHandler', () => {
       await fs.writeFile(filePath, 'content', 'utf8');
       
       await expect(handler.readTextFile(testFile))
-        .rejects.toThrow('File type not allowed');
+        .rejects.toThrow('Access denied');
     });
   });
 
@@ -95,12 +95,12 @@ describe('FileOperationsHandler', () => {
 
     it('should enforce vault boundaries', async () => {
       await expect(handler.writeTextFile('../outside.md', 'content'))
-        .rejects.toThrow('outside vault boundaries');
+        .rejects.toThrow('outside your vault');
     });
 
     it('should validate file extensions', async () => {
       await expect(handler.writeTextFile('test.exe', 'content'))
-        .rejects.toThrow('File type not allowed');
+        .rejects.toThrow('Access denied');
     });
   });
 
@@ -112,7 +112,7 @@ describe('FileOperationsHandler', () => {
       
       await fs.writeFile(filePath, testContent, 'utf8');
       
-      const result = await acpHandlers.handleFsReadTextFile({ path: testFile });
+      const result = await acpHandlers.handleFsReadTextFile({ sessionId: 'test-session', path: testFile });
       
       expect(result.content).toBe(testContent);
       expect(result.encoding).toBe('utf8');
@@ -123,6 +123,7 @@ describe('FileOperationsHandler', () => {
       const testFile = 'test.md';
       
       await acpHandlers.handleFsWriteTextFile({
+        sessionId: 'test-session',
         path: testFile,
         content: testContent
       });
@@ -143,7 +144,7 @@ describe('FileOperationsHandler', () => {
 
     it('should map file errors to JSON-RPC errors', async () => {
       try {
-        await acpHandlers.handleFsReadTextFile({ path: 'nonexistent.md' });
+        await acpHandlers.handleFsReadTextFile({ sessionId: 'test-session', path: 'nonexistent.md' });
         fail('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(JsonRpcError);

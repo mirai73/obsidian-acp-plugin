@@ -25,6 +25,7 @@ describe('SessionManager', () => {
     sessionManager = new SessionManagerImpl(options);
     
     // Create mock JSON-RPC client
+    // Create mock JSON-RPC client
     mockJsonRpcClient = {
       sendRequest: jest.fn(),
       sendNotification: jest.fn(),
@@ -43,6 +44,16 @@ describe('SessionManager', () => {
       setDefaultTimeout: jest.fn(),
       cleanupOldRequests: jest.fn()
     } as any;
+
+    mockJsonRpcClient.sendRequest.mockImplementation((method) => {
+      if (method === 'session/new') {
+        return Promise.resolve({ 
+          sessionId: `session_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          modes: { currentModeId: 'default', availableModes: [] }
+        });
+      }
+      return Promise.resolve({});
+    });
     
     sessionManager.setJsonRpcClient(mockJsonRpcClient);
   });
@@ -137,7 +148,7 @@ describe('SessionManager', () => {
         'session/prompt',
         {
           sessionId,
-          messages: testMessages
+          prompt: testMessages[0].content
         },
         5000 // default timeout
       );

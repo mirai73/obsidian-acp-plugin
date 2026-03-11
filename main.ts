@@ -492,7 +492,7 @@ export default class ACPChatPlugin extends Plugin {
 			if (this.chatView) {
 				// Reveal the leaf
 				this.app.workspace.revealLeaf(this.chatView.leaf);
-				
+				console.log('permission', params)
 				// Show permission in chat timeline
 				const selectedOptionId = await this.chatView.appendPermissionRequest(params);
 
@@ -517,10 +517,7 @@ export default class ACPChatPlugin extends Plugin {
 			const dialog = new PermissionDialog(this.app, {
 				sessionId: params.sessionId,
 				toolCall: params.toolCall,
-				options: params.options,
-				operation: params.operation,
-				resource: params.resource,
-				reason: params.reason
+				options: params.options
 			});
 
 			const selectedId = await dialog.showAndWait();

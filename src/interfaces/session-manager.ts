@@ -11,4 +11,6 @@ export interface SessionManager {
   cancelSession(sessionId: string): Promise<void>;
   updateSession(sessionId: string, update: SessionUpdate): void;
   setMode(sessionId: string, modeId: string): Promise<void>;
+  handleStreamingUpdate(params: any): void;
+  getSessionInfo(sessionId: string): any | null;
 }

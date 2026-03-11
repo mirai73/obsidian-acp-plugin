@@ -61,11 +61,17 @@ export class ACPFileSystemHandlers {
    */
   async handleFsReadTextFile(params: FsReadTextFileParams): Promise<FsReadTextFileResult> {
     try {
-      // Validate parameters
       if (!params || typeof params !== 'object') {
         throw new JsonRpcError(
           JsonRpcErrorCode.INVALID_PARAMS,
-          'Invalid parameters: expected object with path property'
+          'Invalid parameters: expected object with path and sessionId properties'
+        );
+      }
+
+      if (!params.sessionId || typeof params.sessionId !== 'string') {
+        throw new JsonRpcError(
+          JsonRpcErrorCode.INVALID_PARAMS,
+          'Invalid parameters: sessionId must be a non-empty string'
         );
       }
 
@@ -95,11 +101,17 @@ export class ACPFileSystemHandlers {
    */
   async handleFsWriteTextFile(params: FsWriteTextFileParams): Promise<void> {
     try {
-      // Validate parameters
       if (!params || typeof params !== 'object') {
         throw new JsonRpcError(
           JsonRpcErrorCode.INVALID_PARAMS,
-          'Invalid parameters: expected object with path and content properties'
+          'Invalid parameters: expected object with path, content, and sessionId properties'
+        );
+      }
+
+      if (!params.sessionId || typeof params.sessionId !== 'string') {
+        throw new JsonRpcError(
+          JsonRpcErrorCode.INVALID_PARAMS,
+          'Invalid parameters: sessionId must be a non-empty string'
         );
       }
 
@@ -152,7 +164,7 @@ export class ACPFileSystemHandlers {
     const message = error.message || 'Unknown error';
 
     // Map common file system errors
-    if (message.includes('File not found')) {
+    if (message.includes('File not found') || message.includes('could not be found')) {
       return new JsonRpcError(
         JsonRpcErrorCode.FILE_NOT_FOUND,
         `File not found: ${message}`,
@@ -160,7 +172,7 @@ export class ACPFileSystemHandlers {
       );
     }
 
-    if (message.includes('Permission denied') || message.includes('access denied')) {
+    if (message.includes('Permission denied') || message.includes('access denied') || message.includes('Access denied')) {
       return new JsonRpcError(
         JsonRpcErrorCode.PERMISSION_DENIED,
         `Permission denied: ${message}`,
@@ -168,7 +180,7 @@ export class ACPFileSystemHandlers {
       );
     }
 
-    if (message.includes('outside vault boundaries') || message.includes('Invalid file path')) {
+    if (message.includes('outside vault boundaries') || message.includes('outside your vault') || message.includes('Invalid file path')) {
       return new JsonRpcError(
         JsonRpcErrorCode.INVALID_PATH,
         `Invalid path: ${message}`,
@@ -239,6 +251,20 @@ export class ACPSessionHandlers {
         );
       }
 
+      if (!params.toolCall || typeof params.toolCall !== 'object') {
+        throw new JsonRpcError(
+          JsonRpcErrorCode.INVALID_PARAMS,
+          'Invalid parameters: toolCall must be an object'
+        );
+      }
+
+      if (!params.toolCall.toolCallId || typeof params.toolCall.toolCallId !== 'string') {
+        throw new JsonRpcError(
+          JsonRpcErrorCode.INVALID_PARAMS,
+          'Invalid parameters: toolCallId must be a non-empty string'
+        );
+      }
+
       if (!params.options || !Array.isArray(params.options) || params.options.length === 0) {
         throw new JsonRpcError(
           JsonRpcErrorCode.INVALID_PARAMS,
@@ -257,10 +283,15 @@ export class ACPSessionHandlers {
       }
 
       // Request permission through permission manager
+      // Extract kind and resource from toolCall if available
+      const kind = params.toolCall.kind || 'unknown';
+      const resource = params.toolCall.path || params.toolCall.resource || 'unknown';
+      const reason = params.toolCall.title || undefined;
+      console.log('permission request', {params})
       const result = await this.permissionManager.requestPermission(
-        params.operation || 'unknown',
-        params.resource || 'unknown',
-        params.reason,
+        kind,
+        resource,
+        reason,
         params.sessionId
       );
 

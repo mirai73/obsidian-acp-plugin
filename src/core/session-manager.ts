@@ -14,7 +14,9 @@ import {
   SessionCancelParams,
   ContentBlock,
   SessionModeState,
-  SessionSetModeParams
+  SessionSetModeParams,
+  ToolCall,
+  ToolCallUpdate
 } from '../types/acp';
 import { JsonRpcClient } from './json-rpc-client';
 import { JsonRpcError, JsonRpcErrorCode } from './acp-method-handlers';
@@ -35,6 +37,7 @@ export interface SessionContext {
   status: 'active' | 'cancelled' | 'completed';
   pendingOperations: Set<string>;
   modes?: SessionModeState;
+  toolCalls?: Map<string, ToolCall>;
 }
 
 /**
@@ -110,7 +113,8 @@ export class SessionManagerImpl implements SessionManager {
         lastActivity: new Date(),
         status: 'active',
         pendingOperations: new Set(),
-        modes: result.modes
+        modes: result.modes,
+        toolCalls: new Map()
       };
 
       // Store session using the agent's session ID
@@ -335,9 +339,63 @@ export class SessionManagerImpl implements SessionManager {
       if (this.options.onStreamingChunk) {
         this.options.onStreamingChunk(sessionId, { type: 'mode', modeId: update.modeId });
       }
+    } else if (update && update.sessionUpdate === 'tool_call') {
+      // Create new tool call
+      if (!session.toolCalls) {
+        session.toolCalls = new Map();
+      }
+      const toolCall: ToolCall = {
+        toolCallId: update.toolCallId,
+        title: update.title,
+        kind: update.kind,
+        status: update.status || 'pending',
+        content: update.content,
+        locations: update.locations,
+        rawInput: update.rawInput,
+        rawOutput: update.rawOutput
+      };
+      session.toolCalls.set(update.toolCallId, toolCall);
+      
+      // Notify UI
+      if (this.options.onStreamingChunk) {
+        this.options.onStreamingChunk(sessionId, { 
+          type: 'tool_call', 
+          ...toolCall 
+        });
+      }
+      console.debug('Received tool_call:', update.toolCallId);
+    } else if (update && update.sessionUpdate === 'tool_call_update') {
+      // Update existing tool call
+      if (session.toolCalls && session.toolCalls.has(update.toolCallId)) {
+        const existingCall = session.toolCalls.get(update.toolCallId)!;
+        // Merge updates
+        if (update.title !== undefined) existingCall.title = update.title;
+        if (update.kind !== undefined) existingCall.kind = update.kind;
+        if (update.status !== undefined) existingCall.status = update.status;
+        if (update.content !== undefined) {
+          existingCall.content = existingCall.content || [];
+          existingCall.content.push(...update.content);
+        }
+        if (update.locations !== undefined) existingCall.locations = update.locations;
+        if (update.rawInput !== undefined) existingCall.rawInput = update.rawInput;
+        if (update.rawOutput !== undefined) existingCall.rawOutput = update.rawOutput;
+        
+        // Notify UI
+        if (this.options.onStreamingChunk) {
+          this.options.onStreamingChunk(sessionId, { 
+            type: 'tool_call_update', 
+            ...existingCall,
+            // Include the incremental update content if it exists
+            updateContent: update.content
+          });
+        }
+        console.debug('Received tool_call_update:', update.toolCallId);
+      } else {
+        console.warn(`Received tool_call_update for unknown tool call: ${update.toolCallId}`);
+      }
     } else {
       // Handle other types of session updates
-      console.debug('Received session update:', {
+      console.log('Received session update:', {
         sessionId,
         updateType: update?.sessionUpdate || 'unknown'
       });

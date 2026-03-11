@@ -26,13 +26,52 @@ describe('ACPClientImpl Integration', () => {
         on: jest.fn()
       } as any,
       stdin: {
-        write: jest.fn().mockReturnValue(true),
+        write: jest.fn().mockImplementation((data) => {
+          try {
+            const request = JSON.parse(data);
+            if (request.method === 'initialize') {
+              // Simulate agent response
+              const response = {
+                jsonrpc: '2.0',
+                id: request.id,
+                result: {
+                  protocolVersion: 1,
+                  agentCapabilities: ['fs/read_text_file', 'fs/write_text_file', 'session/request_permission']
+                }
+              };
+              // Wait for next tick so the caller of write can finish
+              setTimeout(() => {
+                const stdoutHandlers = (mockProcess.stdout!.on as jest.Mock).mock.calls.filter(
+                  call => call[0] === 'data'
+                );
+                stdoutHandlers.forEach(call => {
+                  call[1](Buffer.from(JSON.stringify(response) + '\n'));
+                });
+              }, 10);
+            }
+          } catch (e) { /* ignore non-json */ }
+          return true;
+        }),
         end: jest.fn(),
         on: jest.fn()
       } as any,
       on: jest.fn(),
-      once: jest.fn(),
-      kill: jest.fn()
+      once: jest.fn().mockImplementation((event, callback) => {
+        if (event === 'exit') {
+          callback(0, null)
+        }
+        return mockProcess;
+      }),
+      kill: jest.fn().mockImplementation(() => {
+        // Trigger exit when kill is called to avoid timeouts in shutdown
+        const exitHandler = (mockProcess.once as jest.Mock).mock.calls.find(
+          call => call[0] === 'exit'
+        )?.[1];
+        if (exitHandler) {
+          setTimeout(() => exitHandler(0, 'SIGTERM'), 10);
+        }
+        return true;
+      })
     };
     
     // Mock spawn to return our mock process
@@ -58,6 +97,9 @@ describe('ACPClientImpl Integration', () => {
       // Advance past spawn delay
       jest.advanceTimersByTime(1100);
       
+      // Advance again for initialize response
+      jest.advanceTimersByTime(100);
+      
       await startPromise;
       
       const connectedAgents = acpClient.getConnectedAgents();
@@ -75,6 +117,7 @@ describe('ACPClientImpl Integration', () => {
       
       const startPromise = acpClient.startAgent('node', ['test-agent.js']);
       jest.advanceTimersByTime(1100);
+      jest.advanceTimersByTime(100);
       await startPromise;
       
       const connectedAgents = acpClient.getConnectedAgents();
@@ -119,6 +162,7 @@ describe('ACPClientImpl Integration', () => {
       const start2Promise = acpClient.startAgentWithConfig(config2);
       
       jest.advanceTimersByTime(1100);
+      jest.advanceTimersByTime(100);
       
       await Promise.all([start1Promise, start2Promise]);
       
@@ -142,13 +186,13 @@ describe('ACPClientImpl Integration', () => {
       acpClient.setFsWriteTextFileHandler(writeHandler);
       
       // Test read handler
-      const readResult = await acpClient.handleFsReadTextFile({ path: '/test.txt' });
+      const readResult = await acpClient.handleFsReadTextFile({ sessionId: 'test-session', path: '/test.txt' });
       expect(readResult).toEqual({ content: 'test content' });
-      expect(readHandler).toHaveBeenCalledWith({ path: '/test.txt' });
+      expect(readHandler).toHaveBeenCalledWith({ sessionId: 'test-session', path: '/test.txt' });
       
       // Test write handler
-      await acpClient.handleFsWriteTextFile({ path: '/test.txt', content: 'new content' });
-      expect(writeHandler).toHaveBeenCalledWith({ path: '/test.txt', content: 'new content' });
+      await acpClient.handleFsWriteTextFile({ sessionId: 'test-session', path: '/test.txt', content: 'new content' });
+      expect(writeHandler).toHaveBeenCalledWith({ sessionId: 'test-session', path: '/test.txt', content: 'new content' });
     });
     
     it('should register and call permission handler', async () => {
@@ -163,12 +207,15 @@ describe('ACPClientImpl Integration', () => {
       
       const result = await acpClient.handleSessionRequestPermission({
         sessionId: 'test-session',
+        toolCall: {
+          toolCallId: 'call_001',
+          kind: 'read',
+          path: '/test.txt'
+        },
         options: [
           { optionId: 'allow_once', name: 'Yes', kind: 'allow_once' },
           { optionId: 'reject_once', name: 'No', kind: 'reject_once' }
-        ],
-        operation: 'read',
-        resource: '/test.txt'
+        ]
       });
       
       expect(result).toEqual({
@@ -179,12 +226,15 @@ describe('ACPClientImpl Integration', () => {
       });
       expect(permissionHandler).toHaveBeenCalledWith({
         sessionId: 'test-session',
+        toolCall: {
+          toolCallId: 'call_001',
+          kind: 'read',
+          path: '/test.txt'
+        },
         options: [
           { optionId: 'allow_once', name: 'Yes', kind: 'allow_once' },
           { optionId: 'reject_once', name: 'No', kind: 'reject_once' }
-        ],
-        operation: 'read',
-        resource: '/test.txt'
+        ]
       });
     });
     
@@ -195,8 +245,10 @@ describe('ACPClientImpl Integration', () => {
       
       const updateParams = {
         sessionId: 'test-session',
-        type: 'message' as const,
-        data: { message: 'test' }
+        update: {
+          sessionUpdate: 'message',
+          data: { message: 'test' }
+        }
       };
       
       acpClient.handleSessionUpdate(updateParams);
@@ -211,6 +263,7 @@ describe('ACPClientImpl Integration', () => {
       
       const startPromise = acpClient.startAgent('node', ['test-agent.js']);
       jest.advanceTimersByTime(1100);
+      jest.advanceTimersByTime(100);
       await startPromise;
       
       const stats = acpClient.getStats();
@@ -226,14 +279,18 @@ describe('ACPClientImpl Integration', () => {
   
   describe('Error handling', () => {
     it('should throw error when no handlers are registered', async () => {
-      await expect(acpClient.handleFsReadTextFile({ path: '/test.txt' }))
+      // Create a client with file operations disabled to test fallback error
+      const noHandlerClient = new ACPClientImpl({ fileOperations: null });
+      
+      await expect(noHandlerClient.handleFsReadTextFile({ sessionId: 'test-session', path: '/test.txt' }))
         .rejects.toThrow('File read handler not registered');
       
-      await expect(acpClient.handleFsWriteTextFile({ path: '/test.txt', content: 'test' }))
+      await expect(noHandlerClient.handleFsWriteTextFile({ sessionId: 'test-session', path: '/test.txt', content: 'test' }))
         .rejects.toThrow('File write handler not registered');
       
-      await expect(acpClient.handleSessionRequestPermission({ 
+      await expect(noHandlerClient.handleSessionRequestPermission({ 
         sessionId: 'test-session',
+        toolCall: { toolCallId: 'call_001' },
         options: [{ optionId: 'allow_once', name: 'Yes', kind: 'allow_once' }]
       }))
         .rejects.toThrow('Permission handler not registered');

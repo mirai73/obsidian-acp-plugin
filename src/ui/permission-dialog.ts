@@ -13,14 +13,11 @@ export interface PermissionOption {
 
 export interface PermissionRequest {
   sessionId: string;
-  toolCall?: {
+  toolCall: {
     toolCallId: string;
-    title: string;
+    [key: string]: any;
   };
   options: PermissionOption[];
-  operation?: string;
-  resource?: string;
-  reason?: string;
 }
 
 export class PermissionDialog extends Modal {
@@ -44,33 +41,24 @@ export class PermissionDialog extends Modal {
     // Request details
     const detailsContainer = contentEl.createDiv('permission-details');
     
-    if (this.request.toolCall?.title) {
-      detailsContainer.createEl('p', { 
-        text: `Tool: ${this.request.toolCall.title}`,
-        cls: 'permission-tool-title'
-      });
-    }
+    const toolTitle = this.request.toolCall.title || 'Agent Action';
+    const operation = this.request.toolCall.kind || 'access';
+    const resource = this.request.toolCall.path || this.request.toolCall.resource || 'unknown';
 
-    if (this.request.operation) {
-      detailsContainer.createEl('p', { 
-        text: `Operation: ${this.request.operation}`,
-        cls: 'permission-operation'
-      });
-    }
+    detailsContainer.createEl('p', { 
+      text: `Action: ${toolTitle}`,
+      cls: 'permission-tool-title'
+    });
 
-    if (this.request.resource) {
-      detailsContainer.createEl('p', { 
-        text: `Resource: ${this.request.resource}`,
-        cls: 'permission-resource'
-      });
-    }
+    detailsContainer.createEl('p', { 
+      text: `Operation: ${operation}`,
+      cls: 'permission-operation'
+    });
 
-    if (this.request.reason) {
-      detailsContainer.createEl('p', { 
-        text: `Reason: ${this.request.reason}`,
-        cls: 'permission-reason'
-      });
-    }
+    detailsContainer.createEl('p', { 
+      text: `Resource: ${resource}`,
+      cls: 'permission-resource'
+    });
 
     // Session info
     detailsContainer.createEl('p', { 

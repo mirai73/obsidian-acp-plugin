@@ -44,7 +44,10 @@ export interface InitializeResult {
 
 // File system operations
 export interface FsReadTextFileParams {
+  sessionId: string;
   path: string;
+  line?: number;
+  limit?: number;
 }
 
 export interface FsReadTextFileResult {
@@ -53,6 +56,7 @@ export interface FsReadTextFileResult {
 }
 
 export interface FsWriteTextFileParams {
+  sessionId: string;
   path: string;
   content: string;
   encoding?: string;
@@ -140,18 +144,15 @@ export interface SessionCancelParams {
 // Permission system
 export interface SessionRequestPermissionParams {
   sessionId: string;
-  toolCall?: {
+  toolCall: {
     toolCallId: string;
-    title: string;
+    [key: string]: any;
   };
   options: Array<{
     optionId: string;
     name: string;
     kind: 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always';
   }>;
-  operation?: string;
-  resource?: string;
-  reason?: string;
 }
 
 export interface SessionRequestPermissionResult {
@@ -162,6 +163,45 @@ export interface SessionRequestPermissionResult {
 }
 
 // Session updates (notifications)
+export type ToolKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'other';
+export type ToolCallStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+export interface ToolCallLocation {
+  path: string;
+  line?: number;
+}
+
+export interface ToolCallContent {
+  type: 'content' | 'diff' | 'terminal';
+  content?: ContentBlock;
+  path?: string;
+  oldText?: string;
+  newText?: string;
+  terminalId?: string;
+}
+
+export interface ToolCall {
+  toolCallId: string;
+  title: string;
+  kind?: ToolKind;
+  status: ToolCallStatus;
+  content?: ToolCallContent[];
+  locations?: ToolCallLocation[];
+  rawInput?: any;
+  rawOutput?: any;
+}
+
+export interface ToolCallUpdate {
+  toolCallId: string;
+  title?: string;
+  kind?: ToolKind;
+  status?: ToolCallStatus;
+  content?: ToolCallContent[];
+  locations?: ToolCallLocation[];
+  rawInput?: any;
+  rawOutput?: any;
+}
+
 export interface SessionUpdateParams {
   sessionId: string;
   update: {

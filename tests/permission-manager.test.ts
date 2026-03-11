@@ -238,17 +238,26 @@ describe('PermissionManager', () => {
       mockUserConfirmation.mockResolvedValue(true);
 
       const result = await acpSessionHandlers.handleSessionRequestPermission({
-        operation: 'read',
-        resource: 'test.md',
-        reason: 'Need to read file for analysis'
+        sessionId: 'test-session',
+        toolCall: {
+          toolCallId: 'call_001',
+          kind: 'read',
+          path: 'test.md',
+          title: 'Need to read file for analysis'
+        },
+        options: [
+          { optionId: 'allow_once', name: 'Allow Once', kind: 'allow_once' },
+          { optionId: 'reject_once', name: 'Reject Once', kind: 'reject_once' }
+        ]
       });
 
-      expect(result).toBe(true);
+      expect(result.outcome.outcome).toBe('selected');
+      expect(result.outcome.optionId).toBe('allow_once');
       expect(mockUserConfirmation).toHaveBeenCalledWith({
         operation: 'read',
         resource: 'test.md',
         reason: 'Need to read file for analysis',
-        sessionId: undefined
+        sessionId: 'test-session'
       });
     });
 
@@ -257,15 +266,25 @@ describe('PermissionManager', () => {
         .rejects.toThrow(JsonRpcError);
 
       await expect(acpSessionHandlers.handleSessionRequestPermission({
-        operation: '',
-        resource: 'test.md'
-      }))
+        sessionId: 'test-session',
+        toolCall: {
+          toolCallId: 'call_001',
+          kind: '',
+          path: 'test.md'
+        },
+        options: [{ optionId: 'allow_once', name: 'Allow Once', kind: 'allow_once' }]
+      } as any))
         .rejects.toThrow(JsonRpcError);
 
       await expect(acpSessionHandlers.handleSessionRequestPermission({
-        operation: 'read',
-        resource: ''
-      }))
+        sessionId: 'test-session',
+        toolCall: {
+          toolCallId: 'call_001',
+          kind: 'read',
+          path: ''
+        },
+        options: [{ optionId: 'allow_once', name: 'Allow Once', kind: 'allow_once' }]
+      } as any))
         .rejects.toThrow(JsonRpcError);
     });
 
@@ -293,11 +312,20 @@ describe('PermissionManager', () => {
     it('should return proper JSON-RPC errors', async () => {
       // Permission denied should return false, not throw
       const result = await acpSessionHandlers.handleSessionRequestPermission({
-        operation: 'read',
-        resource: 'secret/password.txt'
+        sessionId: 'test-session',
+        toolCall: {
+          toolCallId: 'call_001',
+          kind: 'read',
+          path: 'secret/password.txt'
+        },
+        options: [
+          { optionId: 'allow_once', name: 'Allow Once', kind: 'allow_once' },
+          { optionId: 'reject_once', name: 'Reject Once', kind: 'reject_once' }
+        ]
       });
       
-      expect(result).toBe(false);
+      expect(result.outcome.outcome).toBe('selected');
+      expect(result.outcome.optionId).toBe('reject_once');
     });
   });
 });

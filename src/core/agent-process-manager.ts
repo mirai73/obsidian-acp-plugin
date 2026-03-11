@@ -63,11 +63,12 @@ export class AgentProcessManager extends EventEmitter {
     }
     
     // Initialize health tracking
+    const existingHealth = this.processHealth.get(config.id);
     const health: ProcessHealth = {
       status: 'starting',
       startTime: new Date(),
-      errorCount: 0,
-      restartCount: 0
+      errorCount: existingHealth ? existingHealth.errorCount : 0,
+      restartCount: existingHealth ? existingHealth.restartCount : 0
     };
     this.processHealth.set(config.id, health);
     

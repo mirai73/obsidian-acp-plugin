@@ -5,6 +5,7 @@
 
 import { EventEmitter } from 'events';
 import { ACPClient } from '../interfaces/acp-client';
+import { SessionManager } from '../interfaces/session-manager';
 import { AgentProcessManager, AgentConfig, ProcessHealth } from './agent-process-manager';
 import { StdioTransport, ConnectionState } from './stdio-transport';
 import { JsonRpcClient } from './json-rpc-client';
@@ -27,7 +28,7 @@ export interface ACPClientOptions {
   maxRestartAttempts?: number;
   requestTimeout?: number;
   maxPendingRequests?: number;
-  fileOperations?: FileOperationsConfig;
+  fileOperations?: FileOperationsConfig | null;
 }
 
 export interface AgentConnection {
@@ -49,7 +50,7 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
   private options: Required<ACPClientOptions>;
   private fileOperationsHandler?: FileOperationsHandlerImpl;
   private acpFileSystemHandlers?: ACPFileSystemHandlers;
-  private sessionManager?: any; // Reference to session manager for streaming updates
+  private sessionManager?: SessionManager; // Reference to session manager for streaming updates
   
   // Method handlers - to be implemented by the plugin
   private fsReadTextFileHandler?: (params: FsReadTextFileParams) => Promise<FsReadTextFileResult>;
@@ -60,24 +61,29 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
   constructor(options: ACPClientOptions = {}) {
     super();
     
+    const defaultFileOps: FileOperationsConfig = {
+      vaultPath: process.cwd(),
+      allowedExtensions: ['.md', '.txt', '.json'],
+      maxFileSize: 10 * 1024 * 1024,
+      createDirectories: true
+    };
+
     this.options = {
       healthCheckInterval: 30000,
       maxRestartAttempts: 3,
       requestTimeout: 5000,
       maxPendingRequests: 100,
-      fileOperations: {
-        vaultPath: process.cwd(),
-        allowedExtensions: ['.md', '.txt', '.json'],
-        maxFileSize: 10 * 1024 * 1024,
-        createDirectories: true
+      fileOperations: options.fileOperations === null ? null : {
+        ...defaultFileOps,
+        ...options.fileOperations
       },
       ...options
-    };
+    } as Required<ACPClientOptions>;
     
     this.processManager = new AgentProcessManager();
     this.setupProcessManagerEvents();
     
-    // Initialize file operations handler if config provided
+    // Only initialize if not explicitly disabled
     if (this.options.fileOperations) {
       this.initializeFileOperations(this.options.fileOperations);
     }
@@ -381,30 +387,30 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
    * Handle file read requests from agents
    */
   async handleFsReadTextFile(params: FsReadTextFileParams): Promise<FsReadTextFileResult> {
+    if (this.fsReadTextFileHandler) {
+      return this.fsReadTextFileHandler(params);
+    }
+    
     if (this.acpFileSystemHandlers) {
       return this.acpFileSystemHandlers.handleFsReadTextFile(params);
     }
     
-    if (!this.fsReadTextFileHandler) {
-      throw new JsonRpcError(-32601, 'File read handler not available');
-    }
-    
-    return this.fsReadTextFileHandler(params);
+    throw new JsonRpcError(-32601, 'File read handler not registered');
   }
   
   /**
    * Handle file write requests from agents
    */
   async handleFsWriteTextFile(params: FsWriteTextFileParams): Promise<void> {
+    if (this.fsWriteTextFileHandler) {
+      return this.fsWriteTextFileHandler(params);
+    }
+    
     if (this.acpFileSystemHandlers) {
       return this.acpFileSystemHandlers.handleFsWriteTextFile(params);
     }
     
-    if (!this.fsWriteTextFileHandler) {
-      throw new JsonRpcError(-32601, 'File write handler not available');
-    }
-    
-    return this.fsWriteTextFileHandler(params);
+    throw new JsonRpcError(-32601, 'File write handler not registered');
   }
   
   /**
@@ -426,7 +432,7 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
     if (this.sessionManager) {
       this.sessionManager.handleStreamingUpdate(params);
     }
-    
+    console.log(params)
     // Also call the custom handler if set
     if (this.sessionUpdateHandler) {
       this.sessionUpdateHandler(params);
@@ -457,8 +463,15 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
   /**
    * Set session manager reference for streaming updates
    */
-  setSessionManager(sessionManager: any): void {
+  setSessionManager(sessionManager: SessionManager): void {
     this.sessionManager = sessionManager;
+  }
+
+  /**
+   * Get session manager reference
+   */
+  getSessionManager(): SessionManager | undefined {
+    return this.sessionManager;
   }
   
   /**
