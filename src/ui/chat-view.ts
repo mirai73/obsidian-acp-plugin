@@ -719,12 +719,18 @@ export class ChatView extends ItemView implements ChatInterface {
         });
         
         btn.addEventListener('click', () => {
-          // Hide all buttons in this request
-          optionsContainer.style.display = 'none';
+          // Remove the permission request element entirely
+          messageEl.remove();
           
-          // Add a small indicator of what was selected
-          const selectionIndicator = contentEl.createSpan({ cls: 'acp-permission-selection-compact' });
-          selectionIndicator.textContent = `(${option.name})`;
+          // Add a small indicator of what was selected to the tool call element
+          const toolCallEl = this.messagesContainer.querySelector(`#tool-call-${params.toolCall.toolCallId}`);
+          if (toolCallEl) {
+            const toolCallContent = toolCallEl.querySelector('.acp-permission-content-compact');
+            if (toolCallContent) {
+              const selectionIndicator = toolCallContent.createSpan({ cls: 'acp-permission-selection-compact' });
+              selectionIndicator.textContent = `(${option.name})`;
+            }
+          }
           
           resolve(option.optionId);
         });
@@ -738,9 +744,17 @@ export class ChatView extends ItemView implements ChatInterface {
           cls: 'acp-permission-button-compact'
         });
         cancelBtn.addEventListener('click', () => {
-           optionsContainer.style.display = 'none';
-           const selectionIndicator = contentEl.createSpan({ cls: 'acp-permission-selection-compact' });
-           selectionIndicator.textContent = `(Cancelled)`;
+           // Remove the permission request element entirely
+           messageEl.remove();
+           
+           const toolCallEl = this.messagesContainer.querySelector(`#tool-call-${params.toolCall.toolCallId}`);
+           if (toolCallEl) {
+             const toolCallContent = toolCallEl.querySelector('.acp-permission-content-compact');
+             if (toolCallContent) {
+               const selectionIndicator = toolCallContent.createSpan({ cls: 'acp-permission-selection-compact' });
+               selectionIndicator.textContent = `(Cancelled)`;
+             }
+           }
            resolve(null);
         });
       }
