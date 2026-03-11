@@ -1,9 +1,10 @@
 {
-	"id": "acp-chat-plugin",
-	"name": "ACP Chat Plugin",
-	"version": "1.0.0",
+	"id": "acp-chat-assistant",
+	"name": "ACP Chat Assistant",
+	"version": "1.0.3",
 	"minAppVersion": "0.15.0",
-	"description": "Agent Client Protocol (ACP) integration for Obsidian, enabling AI coding assistants to interact with your vault through a standardized JSON-RPC 2.0 interface.",
+	"description": "Agent Client Protocol (ACP) integration, enabling AI coding assistants to interact with your vault through a standardized JSON-RPC 2.0 interface.",
 	"author": "Massimiliano Angelino",
+	"authorUrl": "https://github.com/mirai73/obsidian-acp-plugin",
 	"isDesktopOnly": true
 }

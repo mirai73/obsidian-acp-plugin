@@ -281,7 +281,7 @@ export class ErrorHandler {
         break;
       case ErrorSeverity.LOW:
       default:
-        console.log(logMessage + contextStr);
+        console.error(logMessage + contextStr);
         break;
     }
   }

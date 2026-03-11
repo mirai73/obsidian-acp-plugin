@@ -120,7 +120,7 @@ export class SessionManagerImpl implements SessionManager {
       // Store session using the agent's session ID
       this.sessions.set(result.sessionId, sessionContext);
 
-      console.log(`Created session with agent ID: ${result.sessionId}`);
+
       return { sessionId: result.sessionId };
 
     } catch (error) {
@@ -166,13 +166,13 @@ export class SessionManagerImpl implements SessionManager {
         sessionId,
         prompt: promptContent
       };
-      console.log({params})
+
       const result = await this.jsonRpcClient.sendRequest(
         'session/prompt',
         params,
         this.options.defaultTimeout
       );
-      console.log({result})
+
       
       // Add agent response to session context
       if (result && result.message) {
@@ -449,7 +449,7 @@ export class SessionManagerImpl implements SessionManager {
       
       if (age > timeout && session.status !== 'active') {
         this.sessions.delete(sessionId);
-        console.log(`Cleaned up expired session: ${sessionId}`);
+        console.debug(`Cleaned up expired session: ${sessionId}`);
       }
     }
   }

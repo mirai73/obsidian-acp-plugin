@@ -87,8 +87,6 @@ export class PermissionManagerImpl implements PermissionManager {
 
     this.operationLog.push(entry);
 
-    // Log to console for debugging
-    console.log(`Permission ${granted ? 'GRANTED' : 'DENIED'}: ${operation} on ${resource}`);
   }
 
   /**

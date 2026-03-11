@@ -432,7 +432,7 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
     if (this.sessionManager) {
       this.sessionManager.handleStreamingUpdate(params);
     }
-    console.log(params)
+
     // Also call the custom handler if set
     if (this.sessionUpdateHandler) {
       this.sessionUpdateHandler(params);

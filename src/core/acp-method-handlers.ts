@@ -284,7 +284,7 @@ export class ACPSessionHandlers {
 
       // Request permission through permission manager
       // Extract kind and resource from toolCall if available
-      console.log('permission request', {params})
+
       const result = await this.permissionManager.requestPermission(params);
 
       return result;

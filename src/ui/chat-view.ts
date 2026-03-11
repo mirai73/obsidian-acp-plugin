@@ -125,7 +125,7 @@ export class ChatView extends ItemView implements ChatInterface {
       // Use the vault path as the working directory
       // @ts-ignore
       const vaultPath = this.app.vault.adapter.basePath || process.cwd();
-      console.log({vaultPath})
+
       const session = await this.sessionManager.createSession(vaultPath);
       this.currentSessionId = session.sessionId;
       
@@ -380,9 +380,9 @@ export class ChatView extends ItemView implements ChatInterface {
       }
 
       const sessionId = await this.ensureSession();
-      console.log({userMessageForAgent});
+
       const result = await this.sessionManager.sendPrompt(sessionId, [userMessageForAgent]);
-      console.log({result})
+
       
       // Finalize any streaming message that was being displayed
       this.finalizeStreamingMessage();
@@ -893,7 +893,7 @@ export class ChatView extends ItemView implements ChatInterface {
     try {
       await this.sessionManager.setMode(this.currentSessionId, newModeId);
       this.currentModeId = newModeId;
-      console.log(`Switched to mode: ${newModeId}`);
+
     } catch (error) {
       console.error('Failed to change mode:', error);
       // Revert selector to current mode

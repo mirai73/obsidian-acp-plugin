@@ -229,7 +229,7 @@ export default class ACPChatPlugin extends Plugin {
 			await this.connectAllAgents();
 		});
 
-		console.log("ACP Chat Plugin loaded");
+
 	}
 
 	onunload() {
@@ -237,7 +237,7 @@ export default class ACPChatPlugin extends Plugin {
 		if (this.acpClient) {
 			this.acpClient.shutdown();
 		}
-		console.log("ACP Chat Plugin unloaded");
+
 	}
 
 	async openChatView(): Promise<void> {
@@ -508,7 +508,7 @@ export default class ACPChatPlugin extends Plugin {
 			if (this.chatView) {
 				// Reveal the leaf
 				this.app.workspace.revealLeaf(this.chatView.leaf);
-				console.log('permission', params)
+
 				// Show permission in chat timeline
 				const selectedOptionId = await this.chatView.appendPermissionRequest(params);
 
@@ -1876,7 +1876,7 @@ class ACPChatSettingTab extends PluginSettingTab {
 					.setWarning()
 					.onClick(() => {
 						// This would need to be implemented in the ACP client
-						console.log("Clear logs requested");
+
 						this.displayConnectionLogs(container);
 					})
 			);
