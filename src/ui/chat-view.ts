@@ -702,14 +702,15 @@ export class ChatView extends ItemView implements ChatInterface {
       const resource = (fullToolCall?.locations && fullToolCall.locations.length > 0 ? fullToolCall.locations[0].path : null) || params.toolCall.path || params.toolCall.resource || 'unknown';
       const title = fullToolCall?.title || params.toolCall.title || 'Permission Request';
       
-      const summaryText = `${kind}: ${resource}`;
+      const summaryText = title; // `${kind}: ${resource}`;
       const summaryEl = contentEl.createSpan({ text: summaryText, cls: 'acp-permission-summary' });
       
       if (title) {
         summaryEl.title = title; // Show title as tooltip
       }
 
-      const optionsContainer = contentEl.createDiv('acp-permission-options-compact');
+      const optionsContainer = messageEl.createDiv('acp-permission-options-compact');
+      optionsContainer.style.marginTop = '4px';
       
       params.options.forEach(option => {
         const btn = optionsContainer.createEl('button', {

@@ -226,10 +226,20 @@ export class AgentProcessManager extends EventEmitter {
    */
   private async spawnProcess(config: AgentConfig): Promise<ChildProcess> {
     return new Promise<ChildProcess>((resolve, reject) => {
+      // Ensure common installation paths are included, especially for macOS GUI apps like Obsidian
+      const extendedPath = process.env.PATH
+        ? `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:~/.bun/bin:~/.cargo/bin:~/.local/bin`
+        : '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin';
+
       const options: SpawnOptions = {
         cwd: config.workingDirectory,
-        env: { ...process.env, ...config.environment },
-        stdio: ['pipe', 'pipe', 'pipe']
+        env: {
+          ...process.env,
+          PATH: extendedPath,
+          ...config.environment
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: process.platform === 'win32' || process.env.SHELL || true
       };
       
       const childProcess = spawn(config.command, config.args, options);

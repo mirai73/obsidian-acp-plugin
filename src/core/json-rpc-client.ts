@@ -170,7 +170,7 @@ export class JsonRpcClient {
     
     const request = createRequest(method, params);
     
-    logger.info(LogCategory.PROTOCOL, 'Sending JSON-RPC request', {
+    logger.debug(LogCategory.PROTOCOL, 'Sending JSON-RPC request', {
       method,
       id: request.id,
       hasParams: !!params,
@@ -183,7 +183,7 @@ export class JsonRpcClient {
         request.id,
         method,
         (result) => {
-          logger.info(LogCategory.PROTOCOL, 'Request completed successfully', {
+          logger.debug(LogCategory.PROTOCOL, 'Request completed successfully', {
             method,
             id: request.id,
             sessionId: this.sessionId
