@@ -1,0 +1,8 @@
+node_modules
+dist
+main.js
+styles.css
+manifest.json
+.obsidian
+package-lock.json
+build

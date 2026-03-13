@@ -1107,3 +1107,8 @@ body {
     margin-bottom: var(--size-4-2);
   }
 }
+.acp-agent-selector.is-readonly {
+  pointer-events: none;
+  opacity: 0.8;
+  cursor: default;
+}

@@ -6,6 +6,7 @@ Follow these steps to add a new command to the `/` dropdown manually:
 
 1.  **Define the Command in `ChatView.ts`**:
     Add the new command to the `commands` array at the top of the `ChatView` class:
+
     ```typescript
     private readonly commands = [
       ...
@@ -19,11 +20,12 @@ Follow these steps to add a new command to the `/` dropdown manually:
 
 3.  **Implement the Command's Business Logic**:
     Update `handleSlashCommand` to include a case for your new command:
+
     ```typescript
     private async handleSlashCommand(text: string): Promise<void> {
       const parts = text.split(' ');
       const command = parts[0].toLowerCase();
-      
+
       switch (command) {
         ...
         case '/custom':

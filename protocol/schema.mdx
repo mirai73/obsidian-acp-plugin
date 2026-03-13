@@ -1,6 +1,6 @@
 ---
-title: "Schema"
-description: "Schema definitions for the Agent Client Protocol"
+title: 'Schema'
+description: 'Schema definitions for the Agent Client Protocol'
 ---
 
 ## Agent
@@ -1801,17 +1801,17 @@ See protocol docs: [JSON-RPC Error Object](https://www.jsonrpc.org/specification
 **Properties:**
 
 <ResponseField name="code" type={<a href="#errorcode">ErrorCode</a>} required>
-  A number indicating the error type that occurred. This must be an integer as
-  defined in the JSON-RPC specification.
+	A number indicating the error type that occurred. This must be an integer as
+	defined in the JSON-RPC specification.
 </ResponseField>
-<ResponseField name="data" type={"object"}>
-  Optional primitive or structured value that contains additional information
-  about the error. This may include debugging information or context-specific
-  details.
+<ResponseField name="data" type={'object'}>
+	Optional primitive or structured value that contains additional information
+	about the error. This may include debugging information or context-specific
+	details.
 </ResponseField>
-<ResponseField name="message" type={"string"} required>
-  A string providing a short description of the error. The message should be
-  limited to a concise single sentence.
+<ResponseField name="message" type={'string'} required>
+	A string providing a short description of the error. The message should be
+	limited to a concise single sentence.
 </ResponseField>
 
 ## <span class="font-mono">ErrorCode</span>
@@ -1824,38 +1824,38 @@ and use the reserved range (-32000 to -32099) for protocol-specific errors.
 **Type:** Union
 
 <ResponseField name="-32700" type="int32">
-  **Parse error**: Invalid JSON was received by the server. An error occurred on
-  the server while parsing the JSON text.
+	**Parse error**: Invalid JSON was received by the server. An error occurred on
+	the server while parsing the JSON text.
 </ResponseField>
 
 <ResponseField name="-32600" type="int32">
-  **Invalid request**: The JSON sent is not a valid Request object.
+	**Invalid request**: The JSON sent is not a valid Request object.
 </ResponseField>
 
 <ResponseField name="-32601" type="int32">
-  **Method not found**: The method does not exist or is not available.
+	**Method not found**: The method does not exist or is not available.
 </ResponseField>
 
 <ResponseField name="-32602" type="int32">
-  **Invalid params**: Invalid method parameter(s).
+	**Invalid params**: Invalid method parameter(s).
 </ResponseField>
 
 <ResponseField name="-32603" type="int32">
-  **Internal error**: Internal JSON-RPC error. Reserved for
-  implementation-defined server errors.
+	**Internal error**: Internal JSON-RPC error. Reserved for
+	implementation-defined server errors.
 </ResponseField>
 
 <ResponseField name="-32000" type="int32">
-  **Authentication required**: Authentication is required before this operation
-  can be performed.
+	**Authentication required**: Authentication is required before this operation
+	can be performed.
 </ResponseField>
 
 <ResponseField name="-32002" type="int32">
-  **Resource not found**: A given resource, such as a file, was not found.
+	**Resource not found**: A given resource, such as a file, was not found.
 </ResponseField>
 
 <ResponseField name="Other" type="int32">
-  Other undefined error code.
+	Other undefined error code.
 </ResponseField>
 
 ## <span class="font-mono">ExtNotification</span>
@@ -2250,19 +2250,19 @@ Helps clients choose appropriate icons and UI treatment.
 **Type:** Union
 
 <ResponseField name="allow_once" type="string">
-  Allow this operation only this time.
+	Allow this operation only this time.
 </ResponseField>
 
 <ResponseField name="allow_always" type="string">
-  Allow this operation and remember the choice.
+	Allow this operation and remember the choice.
 </ResponseField>
 
 <ResponseField name="reject_once" type="string">
-  Reject this operation only this time.
+	Reject this operation only this time.
 </ResponseField>
 
 <ResponseField name="reject_always" type="string">
-  Reject this operation and remember the choice.
+	Reject this operation and remember the choice.
 </ResponseField>
 
 ## <span class="font-mono">Plan</span>
@@ -2337,15 +2337,15 @@ See protocol docs: [Plan Entries](https://agentclientprotocol.com/protocol/agent
 **Type:** Union
 
 <ResponseField name="high" type="string">
-  High priority task - critical to the overall goal.
+	High priority task - critical to the overall goal.
 </ResponseField>
 
 <ResponseField name="medium" type="string">
-  Medium priority task - important but not critical.
+	Medium priority task - important but not critical.
 </ResponseField>
 
 <ResponseField name="low" type="string">
-  Low priority task - nice to have but not essential.
+	Low priority task - nice to have but not essential.
 </ResponseField>
 
 ## <span class="font-mono">PlanEntryStatus</span>
@@ -2358,15 +2358,15 @@ See protocol docs: [Plan Entries](https://agentclientprotocol.com/protocol/agent
 **Type:** Union
 
 <ResponseField name="pending" type="string">
-  The task has not started yet.
+	The task has not started yet.
 </ResponseField>
 
 <ResponseField name="in_progress" type="string">
-  The task is currently being worked on.
+	The task is currently being worked on.
 </ResponseField>
 
 <ResponseField name="completed" type="string">
-  The task has been successfully completed.
+	The task has been successfully completed.
 </ResponseField>
 
 ## <span class="font-mono">PromptCapabilities</span>
@@ -2447,15 +2447,15 @@ The Server MUST reply with the same value in the Response object if included. Th
 **Type:** Union
 
 <ResponseField name="null" type="null">
-  {""}
+	{''}
 </ResponseField>
 
 <ResponseField name="Number" type="int64">
-  {""}
+	{''}
 </ResponseField>
 
 <ResponseField name="Str" type="string">
-  {""}
+	{''}
 </ResponseField>
 
 ## <span class="font-mono">RequestPermissionOutcome</span>
@@ -2475,8 +2475,8 @@ See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/promp
 
 <Expandable title="Properties">
 
-<ResponseField name="outcome" type={"string"} required>
-  The discriminator value. Must be `"cancelled"`.
+<ResponseField name="outcome" type={'string'} required>
+	The discriminator value. Must be `"cancelled"`.
 </ResponseField>
 
 </Expandable>
@@ -2618,18 +2618,18 @@ Single-value selector (dropdown).
 **Properties:**
 
 <ResponseField
-  name="currentValue"
-  type={<a href="#sessionconfigvalueid">SessionConfigValueId</a>}
-  required
+	name="currentValue"
+	type={<a href="#sessionconfigvalueid">SessionConfigValueId</a>}
+	required
 >
-  The currently selected value.
+	The currently selected value.
 </ResponseField>
 <ResponseField
-  name="options"
-  type={<a href="#sessionconfigselectoptions">SessionConfigSelectOptions</a>}
-  required
+	name="options"
+	type={<a href="#sessionconfigselectoptions">SessionConfigSelectOptions</a>}
+	required
 >
-  The set of selectable options.
+	The set of selectable options.
 </ResponseField>
 
 ## <span class="font-mono">SessionConfigOptionCategory</span>
@@ -2647,19 +2647,19 @@ Category names that do not begin with `_` are reserved for the ACP spec.
 **Type:** Union
 
 <ResponseField name="mode" type="string">
-  Session mode selector.
+	Session mode selector.
 </ResponseField>
 
 <ResponseField name="model" type="string">
-  Model selector.
+	Model selector.
 </ResponseField>
 
 <ResponseField name="thought_level" type="string">
-  Thought/reasoning level selector.
+	Thought/reasoning level selector.
 </ResponseField>
 
 <ResponseField name="other" type="string">
-  Unknown / uncategorized selector.
+	Unknown / uncategorized selector.
 </ResponseField>
 
 ## <span class="font-mono">SessionConfigSelect</span>
@@ -2671,18 +2671,18 @@ A single-value selector (dropdown) session configuration option payload.
 **Properties:**
 
 <ResponseField
-  name="currentValue"
-  type={<a href="#sessionconfigvalueid">SessionConfigValueId</a>}
-  required
+	name="currentValue"
+	type={<a href="#sessionconfigvalueid">SessionConfigValueId</a>}
+	required
 >
-  The currently selected value.
+	The currently selected value.
 </ResponseField>
 <ResponseField
-  name="options"
-  type={<a href="#sessionconfigselectoptions">SessionConfigSelectOptions</a>}
-  required
+	name="options"
+	type={<a href="#sessionconfigselectoptions">SessionConfigSelectOptions</a>}
+	required
 >
-  The set of selectable options.
+	The set of selectable options.
 </ResponseField>
 
 ## <span class="font-mono">SessionConfigSelectGroup</span>
@@ -2744,11 +2744,11 @@ Possible values for a session configuration option.
 **Type:** Union
 
 <ResponseField name="Ungrouped" type="array">
-  A flat list of options with no grouping.
+	A flat list of options with no grouping.
 </ResponseField>
 
 <ResponseField name="Grouped" type="array">
-  A list of options grouped under headers.
+	A list of options grouped under headers.
 </ResponseField>
 
 ## <span class="font-mono">SessionConfigValueId</span>
@@ -3199,22 +3199,22 @@ See protocol docs: [Stop Reasons](https://agentclientprotocol.com/protocol/promp
 **Type:** Union
 
 <ResponseField name="end_turn" type="string">
-  The turn ended successfully.
+	The turn ended successfully.
 </ResponseField>
 
 <ResponseField name="max_tokens" type="string">
-  The turn ended because the agent reached the maximum number of tokens.
+	The turn ended because the agent reached the maximum number of tokens.
 </ResponseField>
 
 <ResponseField name="max_turn_requests" type="string">
-  The turn ended because the agent reached the maximum number of allowed agent
-  requests between user turns.
+	The turn ended because the agent reached the maximum number of allowed agent
+	requests between user turns.
 </ResponseField>
 
 <ResponseField name="refusal" type="string">
-  The turn ended because the agent refused to continue. The user prompt and
-  everything that comes after it won't be included in the next prompt, so this
-  should be reflected in the UI.
+	The turn ended because the agent refused to continue. The user prompt and
+	everything that comes after it won't be included in the next prompt, so this
+	should be reflected in the UI.
 </ResponseField>
 
 <ResponseField name="cancelled" type="string">
@@ -3505,20 +3505,20 @@ See protocol docs: [Status](https://agentclientprotocol.com/protocol/tool-calls#
 **Type:** Union
 
 <ResponseField name="pending" type="string">
-  The tool call hasn't started running yet because the input is either streaming
-  or we're awaiting approval.
+	The tool call hasn't started running yet because the input is either streaming
+	or we're awaiting approval.
 </ResponseField>
 
 <ResponseField name="in_progress" type="string">
-  The tool call is currently running.
+	The tool call is currently running.
 </ResponseField>
 
 <ResponseField name="completed" type="string">
-  The tool call completed successfully.
+	The tool call completed successfully.
 </ResponseField>
 
 <ResponseField name="failed" type="string">
-  The tool call failed with an error.
+	The tool call failed with an error.
 </ResponseField>
 
 ## <span class="font-mono">ToolCallUpdate</span>
@@ -3579,43 +3579,43 @@ See protocol docs: [Creating](https://agentclientprotocol.com/protocol/tool-call
 **Type:** Union
 
 <ResponseField name="read" type="string">
-  Reading files or data.
+	Reading files or data.
 </ResponseField>
 
 <ResponseField name="edit" type="string">
-  Modifying files or content.
+	Modifying files or content.
 </ResponseField>
 
 <ResponseField name="delete" type="string">
-  Removing files or data.
+	Removing files or data.
 </ResponseField>
 
 <ResponseField name="move" type="string">
-  Moving or renaming files.
+	Moving or renaming files.
 </ResponseField>
 
 <ResponseField name="search" type="string">
-  Searching for information.
+	Searching for information.
 </ResponseField>
 
 <ResponseField name="execute" type="string">
-  Running commands or code.
+	Running commands or code.
 </ResponseField>
 
 <ResponseField name="think" type="string">
-  Internal reasoning or planning.
+	Internal reasoning or planning.
 </ResponseField>
 
 <ResponseField name="fetch" type="string">
-  Retrieving external data.
+	Retrieving external data.
 </ResponseField>
 
 <ResponseField name="switch_mode" type="string">
-  Switching the current session mode.
+	Switching the current session mode.
 </ResponseField>
 
 <ResponseField name="other" type="string">
-  Other tool types (default).
+	Other tool types (default).
 </ResponseField>
 
 ## <span class="font-mono">UnstructuredCommandInput</span>

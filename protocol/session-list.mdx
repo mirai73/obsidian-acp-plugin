@@ -1,6 +1,6 @@
 ---
-title: "Session List"
-description: "Discovering existing sessions"
+title: 'Session List'
+description: 'Discovering existing sessions'
 ---
 
 The `session/list` method allows Clients to discover sessions known to an Agent. Clients can use this to display session history and switch between sessions.
@@ -38,16 +38,16 @@ Before attempting to list sessions, Clients **MUST** verify that the Agent suppo
 
 ```json highlight={7-9}
 {
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": 1,
-    "agentCapabilities": {
-      "sessionCapabilities": {
-        "list": {}
-      }
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 0,
+	"result": {
+		"protocolVersion": 1,
+		"agentCapabilities": {
+			"sessionCapabilities": {
+				"list": {}
+			}
+		}
+	}
 }
 ```
 
@@ -59,60 +59,60 @@ Clients discover existing sessions by calling the `session/list` method with opt
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "session/list",
-  "params": {
-    "cwd": "/home/user/project",
-    "cursor": "eyJwYWdlIjogMn0="
-  }
+	"jsonrpc": "2.0",
+	"id": 2,
+	"method": "session/list",
+	"params": {
+		"cwd": "/home/user/project",
+		"cursor": "eyJwYWdlIjogMn0="
+	}
 }
 ```
 
 All parameters are optional. A request with an empty `params` object returns the first page of sessions.
 
 <ParamField path="cwd" type="string">
-  Filter sessions by working directory. Must be an absolute path. Only sessions
-  with a matching `cwd` are returned.
+	Filter sessions by working directory. Must be an absolute path. Only sessions
+	with a matching `cwd` are returned.
 </ParamField>
 
 <ParamField path="cursor" type="string">
-  Opaque cursor token from a previous response's `nextCursor` field for
-  cursor-based pagination. See [Pagination](#pagination).
+	Opaque cursor token from a previous response's `nextCursor` field for
+	cursor-based pagination. See [Pagination](#pagination).
 </ParamField>
 
 The Agent **MUST** respond with a list of sessions and optional pagination metadata:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "sessions": [
-      {
-        "sessionId": "sess_abc123def456",
-        "cwd": "/home/user/project",
-        "title": "Implement session list API",
-        "updatedAt": "2025-10-29T14:22:15Z",
-        "_meta": {
-          "messageCount": 12,
-          "hasErrors": false
-        }
-      },
-      {
-        "sessionId": "sess_xyz789ghi012",
-        "cwd": "/home/user/another-project",
-        "title": "Debug authentication flow",
-        "updatedAt": "2025-10-28T16:45:30Z"
-      },
-      {
-        "sessionId": "sess_uvw345rst678",
-        "cwd": "/home/user/project",
-        "updatedAt": "2025-10-27T15:30:00Z"
-      }
-    ],
-    "nextCursor": "eyJwYWdlIjogM30="
-  }
+	"jsonrpc": "2.0",
+	"id": 2,
+	"result": {
+		"sessions": [
+			{
+				"sessionId": "sess_abc123def456",
+				"cwd": "/home/user/project",
+				"title": "Implement session list API",
+				"updatedAt": "2025-10-29T14:22:15Z",
+				"_meta": {
+					"messageCount": 12,
+					"hasErrors": false
+				}
+			},
+			{
+				"sessionId": "sess_xyz789ghi012",
+				"cwd": "/home/user/another-project",
+				"title": "Debug authentication flow",
+				"updatedAt": "2025-10-28T16:45:30Z"
+			},
+			{
+				"sessionId": "sess_uvw345rst678",
+				"cwd": "/home/user/project",
+				"updatedAt": "2025-10-27T15:30:00Z"
+			}
+		],
+		"nextCursor": "eyJwYWdlIjogM30="
+	}
 }
 ```
 
@@ -139,8 +139,8 @@ The Agent **MUST** respond with a list of sessions and optional pagination metad
 </ResponseField>
 
 <ResponseField name="nextCursor" type="string">
-  Opaque cursor token. If present, pass this in the next request's `cursor`
-  parameter to fetch the next page. If absent, there are no more results.
+	Opaque cursor token. If present, pass this in the next request's `cursor`
+	parameter to fetch the next page. If absent, there are no more results.
 </ResponseField>
 
 When no sessions match the criteria, the Agent **MUST** return an empty `sessions` array.
@@ -160,34 +160,34 @@ Agents can update session metadata in real-time by sending a `session_info_updat
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "session/update",
-  "params": {
-    "sessionId": "sess_abc123def456",
-    "update": {
-      "sessionUpdate": "session_info_update",
-      "title": "Implement user authentication",
-      "_meta": {
-        "tags": ["feature", "auth"],
-        "priority": "high"
-      }
-    }
-  }
+	"jsonrpc": "2.0",
+	"method": "session/update",
+	"params": {
+		"sessionId": "sess_abc123def456",
+		"update": {
+			"sessionUpdate": "session_info_update",
+			"title": "Implement user authentication",
+			"_meta": {
+				"tags": ["feature", "auth"],
+				"priority": "high"
+			}
+		}
+	}
 }
 ```
 
 All fields are optional. Only include fields that have changed — omitted fields are left unchanged.
 
 <ResponseField name="title" type="string | null">
-  Human-readable title for the session. Set to `null` to clear.
+	Human-readable title for the session. Set to `null` to clear.
 </ResponseField>
 
 <ResponseField name="updatedAt" type="string | null">
-  ISO 8601 timestamp of last activity. Set to `null` to clear.
+	ISO 8601 timestamp of last activity. Set to `null` to clear.
 </ResponseField>
 
 <ResponseField name="_meta" type="object">
-  Agent-specific metadata. See [Extensibility](./extensibility).
+	Agent-specific metadata. See [Extensibility](./extensibility).
 </ResponseField>
 
 The `sessionId` and `cwd` fields are **not** included in the update — `sessionId` is already in the notification's `params`, and `cwd` is immutable (set during [`session/new`](./session-setup#creating-a-session)). Agents typically send this notification after the first meaningful exchange to auto-generate a title.

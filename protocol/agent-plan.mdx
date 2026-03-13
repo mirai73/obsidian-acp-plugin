@@ -1,6 +1,6 @@
 ---
-title: "Agent Plan"
-description: "How Agents communicate their execution plans"
+title: 'Agent Plan'
+description: 'How Agents communicate their execution plans'
 ---
 
 Plans are execution strategies for complex tasks that require multiple steps.
@@ -13,37 +13,37 @@ When the language model creates an execution plan, the Agent **SHOULD** report i
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "session/update",
-  "params": {
-    "sessionId": "sess_abc123def456",
-    "update": {
-      "sessionUpdate": "plan",
-      "entries": [
-        {
-          "content": "Analyze the existing codebase structure",
-          "priority": "high",
-          "status": "pending"
-        },
-        {
-          "content": "Identify components that need refactoring",
-          "priority": "high",
-          "status": "pending"
-        },
-        {
-          "content": "Create unit tests for critical functions",
-          "priority": "medium",
-          "status": "pending"
-        }
-      ]
-    }
-  }
+	"jsonrpc": "2.0",
+	"method": "session/update",
+	"params": {
+		"sessionId": "sess_abc123def456",
+		"update": {
+			"sessionUpdate": "plan",
+			"entries": [
+				{
+					"content": "Analyze the existing codebase structure",
+					"priority": "high",
+					"status": "pending"
+				},
+				{
+					"content": "Identify components that need refactoring",
+					"priority": "high",
+					"status": "pending"
+				},
+				{
+					"content": "Create unit tests for critical functions",
+					"priority": "medium",
+					"status": "pending"
+				}
+			]
+		}
+	}
 }
 ```
 
 <ParamField path="entries" type="PlanEntry[]" required>
-  An array of [plan entries](#plan-entries) representing the tasks to be
-  accomplished
+	An array of [plan entries](#plan-entries) representing the tasks to be
+	accomplished
 </ParamField>
 
 ## Plan Entries
@@ -51,7 +51,7 @@ When the language model creates an execution plan, the Agent **SHOULD** report i
 Each plan entry represents a specific task or goal within the overall execution strategy:
 
 <ParamField path="content" type="string" required>
-  A human-readable description of what this task aims to accomplish
+	A human-readable description of what this task aims to accomplish
 </ParamField>
 
 <ParamField path="priority" type="PlanEntryPriority" required>

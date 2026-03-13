@@ -1,15 +1,15 @@
 ---
-title: "Session Config Options"
-description: "Flexible configuration selectors for agent sessions"
+title: 'Session Config Options'
+description: 'Flexible configuration selectors for agent sessions'
 ---
 
 Agents can provide an arbitrary list of configuration options for a session, allowing Clients to offer users customizable selectors for things like models, modes, reasoning levels, and more.
 
 <Info>
-  Session Config Options are the preferred way to expose session-level
-  configuration. If an Agent provides `configOptions`, Clients **SHOULD** use
-  them instead of the [`modes`](./session-modes) field. Modes will be removed in
-  a future version of the protocol.
+	Session Config Options are the preferred way to expose session-level
+	configuration. If an Agent provides `configOptions`, Clients **SHOULD** use
+	them instead of the [`modes`](./session-modes) field. Modes will be removed in
+	a future version of the protocol.
 </Info>
 
 ## Initial State
@@ -18,104 +18,104 @@ During [Session Setup](./session-setup) the Agent **MAY** return a list of confi
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "sessionId": "sess_abc123def456",
-    "configOptions": [
-      {
-        "id": "mode",
-        "name": "Session Mode",
-        "description": "Controls how the agent requests permission",
-        "category": "mode",
-        "type": "select",
-        "currentValue": "ask",
-        "options": [
-          {
-            "value": "ask",
-            "name": "Ask",
-            "description": "Request permission before making any changes"
-          },
-          {
-            "value": "code",
-            "name": "Code",
-            "description": "Write and modify code with full tool access"
-          }
-        ]
-      },
-      {
-        "id": "model",
-        "name": "Model",
-        "category": "model",
-        "type": "select",
-        "currentValue": "model-1",
-        "options": [
-          {
-            "value": "model-1",
-            "name": "Model 1",
-            "description": "The fastest model"
-          },
-          {
-            "value": "model-2",
-            "name": "Model 2",
-            "description": "The most powerful model"
-          }
-        ]
-      }
-    ]
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"result": {
+		"sessionId": "sess_abc123def456",
+		"configOptions": [
+			{
+				"id": "mode",
+				"name": "Session Mode",
+				"description": "Controls how the agent requests permission",
+				"category": "mode",
+				"type": "select",
+				"currentValue": "ask",
+				"options": [
+					{
+						"value": "ask",
+						"name": "Ask",
+						"description": "Request permission before making any changes"
+					},
+					{
+						"value": "code",
+						"name": "Code",
+						"description": "Write and modify code with full tool access"
+					}
+				]
+			},
+			{
+				"id": "model",
+				"name": "Model",
+				"category": "model",
+				"type": "select",
+				"currentValue": "model-1",
+				"options": [
+					{
+						"value": "model-1",
+						"name": "Model 1",
+						"description": "The fastest model"
+					},
+					{
+						"value": "model-2",
+						"name": "Model 2",
+						"description": "The most powerful model"
+					}
+				]
+			}
+		]
+	}
 }
 ```
 
 <ResponseField name="configOptions" type="ConfigOption[]">
-  The list of configuration options available for this session. The order of
-  this array represents the Agent's preferred priority. Clients **SHOULD**
-  respect this ordering when displaying options.
+	The list of configuration options available for this session. The order of
+	this array represents the Agent's preferred priority. Clients **SHOULD**
+	respect this ordering when displaying options.
 </ResponseField>
 
 ### ConfigOption
 
 <ResponseField name="id" type="string" required>
-  Unique identifier for this configuration option. Used when setting values.
+	Unique identifier for this configuration option. Used when setting values.
 </ResponseField>
 
 <ResponseField name="name" type="string" required>
-  Human-readable label for the option
+	Human-readable label for the option
 </ResponseField>
 
 <ResponseField name="description" type="string">
-  Optional description providing more details about what this option controls
+	Optional description providing more details about what this option controls
 </ResponseField>
 
 <ResponseField name="category" type="ConfigOptionCategory">
-  Optional [semantic category](#option-categories) to help Clients provide
-  consistent UX.
+	Optional [semantic category](#option-categories) to help Clients provide
+	consistent UX.
 </ResponseField>
 
 <ResponseField name="type" type="ConfigOptionType" required>
-  The type of input control. Currently only `select` is supported.
+	The type of input control. Currently only `select` is supported.
 </ResponseField>
 
 <ResponseField name="currentValue" type="string" required>
-  The currently selected value for this option
+	The currently selected value for this option
 </ResponseField>
 
 <ResponseField name="options" type="ConfigOptionValue[]" required>
-  The available values for this option
+	The available values for this option
 </ResponseField>
 
 ### ConfigOptionValue
 
 <ResponseField name="value" type="string" required>
-  The value identifier used when setting this option
+	The value identifier used when setting this option
 </ResponseField>
 
 <ResponseField name="name" type="string" required>
-  Human-readable name to display
+	Human-readable name to display
 </ResponseField>
 
 <ResponseField name="description" type="string">
-  Optional description of what this value does
+	Optional description of what this value does
 </ResponseField>
 
 ## Option Categories
@@ -123,8 +123,8 @@ During [Session Setup](./session-setup) the Agent **MAY** return a list of confi
 Each config option **MAY** include a `category` field. Categories are semantic metadata intended to help Clients provide consistent UX, such as attaching keyboard shortcuts, choosing icons, or deciding placement.
 
 <Warning>
-  Categories are for UX purposes only and **MUST NOT** be required for
-  correctness. Clients **MUST** handle missing or unknown categories gracefully.
+	Categories are for UX purposes only and **MUST NOT** be required for
+	correctness. Clients **MUST** handle missing or unknown categories gracefully.
 </Warning>
 
 Category names beginning with `_` are free for custom use (e.g., `_my_custom_category`). Category names that do not begin with `_` are reserved for the ACP spec.
@@ -167,28 +167,28 @@ Clients can change a config option value by calling the `session/set_config_opti
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "session/set_config_option",
-  "params": {
-    "sessionId": "sess_abc123def456",
-    "configId": "mode",
-    "value": "code"
-  }
+	"jsonrpc": "2.0",
+	"id": 2,
+	"method": "session/set_config_option",
+	"params": {
+		"sessionId": "sess_abc123def456",
+		"configId": "mode",
+		"value": "code"
+	}
 }
 ```
 
 <ParamField path="sessionId" type="SessionId" required>
-  The ID of the session
+	The ID of the session
 </ParamField>
 
 <ParamField path="configId" type="string" required>
-  The `id` of the configuration option to change
+	The `id` of the configuration option to change
 </ParamField>
 
 <ParamField path="value" type="string" required>
-  The new value to set. Must be one of the values listed in the option's
-  `options` array.
+	The new value to set. Must be one of the values listed in the option's
+	`options` array.
 </ParamField>
 
 The Agent **MUST** respond with the complete list of all configuration options and their current values:
@@ -219,10 +219,10 @@ The Agent **MUST** respond with the complete list of all configuration options a
 ```
 
 <Note>
-  The response always contains the **complete** configuration state. This allows
-  Agents to reflect dependent changes. For example, if changing the model
-  affects available reasoning options, or if an option's available values change
-  based on another selection.
+	The response always contains the **complete** configuration state. This allows
+	Agents to reflect dependent changes. For example, if changing the model
+	affects available reasoning options, or if an option's available values change
+	based on another selection.
 </Note>
 
 ### From the Agent
@@ -278,5 +278,5 @@ If an Agent provides both `configOptions` and `modes` in the session response:
 - Agents **SHOULD** keep both in sync to ensure consistent behavior regardless of which field the Client uses
 
 <Card icon="gears" horizontal href="../session-modes">
-  Learn about the Session Modes API
+	Learn about the Session Modes API
 </Card>

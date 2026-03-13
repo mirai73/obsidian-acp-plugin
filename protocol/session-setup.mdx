@@ -1,6 +1,6 @@
 ---
-title: "Session Setup"
-description: "Creating and loading sessions"
+title: 'Session Setup'
+description: 'Creating and loading sessions'
 ---
 
 Sessions represent a specific conversation or thread between the [Client](./overview#client) and [Agent](./overview#agent). Each session maintains its own context, conversation history, and state, allowing multiple independent interactions with the same Agent.
@@ -46,20 +46,20 @@ Clients create a new session by calling the `session/new` method with:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "session/new",
-  "params": {
-    "cwd": "/home/user/project",
-    "mcpServers": [
-      {
-        "name": "filesystem",
-        "command": "/path/to/mcp-server",
-        "args": ["--stdio"],
-        "env": []
-      }
-    ]
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"method": "session/new",
+	"params": {
+		"cwd": "/home/user/project",
+		"mcpServers": [
+			{
+				"name": "filesystem",
+				"command": "/path/to/mcp-server",
+				"args": ["--stdio"],
+				"env": []
+			}
+		]
+	}
 }
 ```
 
@@ -67,11 +67,11 @@ The Agent **MUST** respond with a unique [Session ID](#session-id) that identifi
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "sessionId": "sess_abc123def456"
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"result": {
+		"sessionId": "sess_abc123def456"
+	}
 }
 ```
 
@@ -85,14 +85,14 @@ Before attempting to load a session, Clients **MUST** verify that the Agent supp
 
 ```json highlight={7}
 {
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": 1,
-    "agentCapabilities": {
-      "loadSession": true
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 0,
+	"result": {
+		"protocolVersion": 1,
+		"agentCapabilities": {
+			"loadSession": true
+		}
+	}
 }
 ```
 
@@ -108,21 +108,21 @@ To load an existing session, Clients **MUST** call the `session/load` method wit
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "session/load",
-  "params": {
-    "sessionId": "sess_789xyz",
-    "cwd": "/home/user/project",
-    "mcpServers": [
-      {
-        "name": "filesystem",
-        "command": "/path/to/mcp-server",
-        "args": ["--mode", "filesystem"],
-        "env": []
-      }
-    ]
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"method": "session/load",
+	"params": {
+		"sessionId": "sess_789xyz",
+		"cwd": "/home/user/project",
+		"mcpServers": [
+			{
+				"name": "filesystem",
+				"command": "/path/to/mcp-server",
+				"args": ["--mode", "filesystem"],
+				"env": []
+			}
+		]
+	}
 }
 ```
 
@@ -132,18 +132,18 @@ For example, a user message from the conversation history:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "session/update",
-  "params": {
-    "sessionId": "sess_789xyz",
-    "update": {
-      "sessionUpdate": "user_message_chunk",
-      "content": {
-        "type": "text",
-        "text": "What's the capital of France?"
-      }
-    }
-  }
+	"jsonrpc": "2.0",
+	"method": "session/update",
+	"params": {
+		"sessionId": "sess_789xyz",
+		"update": {
+			"sessionUpdate": "user_message_chunk",
+			"content": {
+				"type": "text",
+				"text": "What's the capital of France?"
+			}
+		}
+	}
 }
 ```
 
@@ -151,18 +151,18 @@ Followed by the agent's response:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "session/update",
-  "params": {
-    "sessionId": "sess_789xyz",
-    "update": {
-      "sessionUpdate": "agent_message_chunk",
-      "content": {
-        "type": "text",
-        "text": "The capital of France is Paris."
-      }
-    }
-  }
+	"jsonrpc": "2.0",
+	"method": "session/update",
+	"params": {
+		"sessionId": "sess_789xyz",
+		"update": {
+			"sessionUpdate": "agent_message_chunk",
+			"content": {
+				"type": "text",
+				"text": "The capital of France is Paris."
+			}
+		}
+	}
 }
 ```
 
@@ -170,9 +170,9 @@ When **all** the conversation entries have been streamed to the Client, the Agen
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": null
+	"jsonrpc": "2.0",
+	"id": 1,
+	"result": null
 }
 ```
 
@@ -211,15 +211,15 @@ While they are not required to by the spec, new Agents **SHOULD** support the HT
 All Agents **MUST** support connecting to MCP servers via stdio (standard input/output). This is the default transport mechanism.
 
 <ParamField path="name" type="string" required>
-  A human-readable identifier for the server
+	A human-readable identifier for the server
 </ParamField>
 
 <ParamField path="command" type="string" required>
-  The absolute path to the MCP server executable
+	The absolute path to the MCP server executable
 </ParamField>
 
 <ParamField path="args" type="array" required>
-  Command-line arguments to pass to the server
+	Command-line arguments to pass to the server
 </ParamField>
 
 <ParamField path="env" type="EnvVariable[]">
@@ -239,15 +239,15 @@ Example stdio transport configuration:
 
 ```json
 {
-  "name": "filesystem",
-  "command": "/path/to/mcp-server",
-  "args": ["--stdio"],
-  "env": [
-    {
-      "name": "API_KEY",
-      "value": "secret123"
-    }
-  ]
+	"name": "filesystem",
+	"command": "/path/to/mcp-server",
+	"args": ["--stdio"],
+	"env": [
+		{
+			"name": "API_KEY",
+			"value": "secret123"
+		}
+	]
 }
 ```
 
@@ -256,15 +256,15 @@ Example stdio transport configuration:
 When the Agent supports `mcpCapabilities.http`, Clients can specify MCP servers configurations using the HTTP transport.
 
 <ParamField path="type" type="string" required>
-  Must be `"http"` to indicate HTTP transport
+	Must be `"http"` to indicate HTTP transport
 </ParamField>
 
 <ParamField path="name" type="string" required>
-  A human-readable identifier for the server
+	A human-readable identifier for the server
 </ParamField>
 
 <ParamField path="url" type="string" required>
-  The URL of the MCP server
+	The URL of the MCP server
 </ParamField>
 
 <ParamField path="headers" type="HttpHeader[]" required>
@@ -284,19 +284,19 @@ Example HTTP transport configuration:
 
 ```json
 {
-  "type": "http",
-  "name": "api-server",
-  "url": "https://api.example.com/mcp",
-  "headers": [
-    {
-      "name": "Authorization",
-      "value": "Bearer token123"
-    },
-    {
-      "name": "Content-Type",
-      "value": "application/json"
-    }
-  ]
+	"type": "http",
+	"name": "api-server",
+	"url": "https://api.example.com/mcp",
+	"headers": [
+		{
+			"name": "Authorization",
+			"value": "Bearer token123"
+		},
+		{
+			"name": "Content-Type",
+			"value": "application/json"
+		}
+	]
 }
 ```
 
@@ -307,15 +307,15 @@ When the Agent supports `mcpCapabilities.sse`, Clients can specify MCP servers c
 <Warning>This transport was deprecated by the MCP spec.</Warning>
 
 <ParamField path="type" type="string" required>
-  Must be `"sse"` to indicate SSE transport
+	Must be `"sse"` to indicate SSE transport
 </ParamField>
 
 <ParamField path="name" type="string" required>
-  A human-readable identifier for the server
+	A human-readable identifier for the server
 </ParamField>
 
 <ParamField path="url" type="string" required>
-  The URL of the SSE endpoint
+	The URL of the SSE endpoint
 </ParamField>
 
 <ParamField path="headers" type="HttpHeader[]" required>
@@ -335,15 +335,15 @@ Example SSE transport configuration:
 
 ```json
 {
-  "type": "sse",
-  "name": "event-stream",
-  "url": "https://events.example.com/mcp",
-  "headers": [
-    {
-      "name": "X-API-Key",
-      "value": "apikey456"
-    }
-  ]
+	"type": "sse",
+	"name": "event-stream",
+	"url": "https://events.example.com/mcp",
+	"headers": [
+		{
+			"name": "X-API-Key",
+			"value": "apikey456"
+		}
+	]
 }
 ```
 
@@ -353,17 +353,17 @@ Before using HTTP or SSE transports, Clients **MUST** verify the Agent's capabil
 
 ```json highlight={7-10}
 {
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": 1,
-    "agentCapabilities": {
-      "mcpCapabilities": {
-        "http": true,
-        "sse": true
-      }
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 0,
+	"result": {
+		"protocolVersion": 1,
+		"agentCapabilities": {
+			"mcpCapabilities": {
+				"http": true,
+				"sse": true
+			}
+		}
+	}
 }
 ```
 

@@ -5,439 +5,444 @@
 
 /* Error Message Containers */
 .error-message {
-  border-radius: 8px;
-  padding: 12px;
-  margin: 8px 0;
-  border-left: 4px solid;
-  background-color: var(--background-secondary);
-  font-family: var(--font-interface);
+	border-radius: 8px;
+	padding: 12px;
+	margin: 8px 0;
+	border-left: 4px solid;
+	background-color: var(--background-secondary);
+	font-family: var(--font-interface);
 }
 
 .error-message.severity-low {
-  border-left-color: var(--color-blue);
-  background-color: var(--color-blue-rgb, 0, 100, 200, 0.1);
+	border-left-color: var(--color-blue);
+	background-color: var(--color-blue-rgb, 0, 100, 200, 0.1);
 }
 
 .error-message.severity-medium {
-  border-left-color: var(--color-orange);
-  background-color: rgba(255, 165, 0, 0.1);
+	border-left-color: var(--color-orange);
+	background-color: rgba(255, 165, 0, 0.1);
 }
 
 .error-message.severity-high {
-  border-left-color: var(--color-red);
-  background-color: rgba(255, 0, 0, 0.1);
+	border-left-color: var(--color-red);
+	background-color: rgba(255, 0, 0, 0.1);
 }
 
 .error-message.severity-critical {
-  border-left-color: var(--color-red);
-  background-color: rgba(139, 0, 0, 0.15);
-  animation: pulse-critical 2s infinite;
+	border-left-color: var(--color-red);
+	background-color: rgba(139, 0, 0, 0.15);
+	animation: pulse-critical 2s infinite;
 }
 
 @keyframes pulse-critical {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.8;
+	}
 }
 
 /* Error Header */
 .error-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+	font-weight: 600;
 }
 
 .error-icon {
-  font-size: 16px;
-  line-height: 1;
+	font-size: 16px;
+	line-height: 1;
 }
 
 .error-title {
-  color: var(--text-normal);
-  font-size: 14px;
+	color: var(--text-normal);
+	font-size: 14px;
 }
 
 /* Error Message Text */
 .error-message-text {
-  color: var(--text-normal);
-  font-size: 14px;
-  line-height: 1.4;
-  margin-bottom: 8px;
+	color: var(--text-normal);
+	font-size: 14px;
+	line-height: 1.4;
+	margin-bottom: 8px;
 }
 
 /* Error Code */
 .error-code {
-  font-family: var(--font-monospace);
-  font-size: 12px;
-  color: var(--text-muted);
-  background-color: var(--background-primary-alt);
-  padding: 4px 8px;
-  border-radius: 4px;
-  margin-top: 8px;
-  display: inline-block;
+	font-family: var(--font-monospace);
+	font-size: 12px;
+	color: var(--text-muted);
+	background-color: var(--background-primary-alt);
+	padding: 4px 8px;
+	border-radius: 4px;
+	margin-top: 8px;
+	display: inline-block;
 }
 
 /* Error Timestamp */
 .error-timestamp {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 4px;
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 4px;
 }
 
 /* Error Context */
 .error-context {
-  margin-top: 8px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  background-color: var(--background-primary);
+	margin-top: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background-color: var(--background-primary);
 }
 
 .error-context summary {
-  padding: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-muted);
-  background-color: var(--background-secondary);
-  border-radius: 4px 4px 0 0;
+	padding: 8px;
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--text-muted);
+	background-color: var(--background-secondary);
+	border-radius: 4px 4px 0 0;
 }
 
 .error-context summary:hover {
-  background-color: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
 }
 
 .context-list {
-  list-style: none;
-  padding: 8px;
-  margin: 0;
+	list-style: none;
+	padding: 8px;
+	margin: 0;
 }
 
 .context-item {
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-family: var(--font-monospace);
+	margin-bottom: 4px;
+	font-size: 12px;
+	font-family: var(--font-monospace);
 }
 
 .context-key {
-  color: var(--text-accent);
-  font-weight: 600;
+	color: var(--text-accent);
+	font-weight: 600;
 }
 
 .context-value {
-  color: var(--text-normal);
-  word-break: break-all;
+	color: var(--text-normal);
+	word-break: break-all;
 }
 
 .context-more {
-  color: var(--text-muted);
-  font-style: italic;
+	color: var(--text-muted);
+	font-style: italic;
 }
 
 /* Error Actions */
 .error-actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
+	margin-top: 12px;
+	display: flex;
+	gap: 8px;
 }
 
 .error-retry-button {
-  background-color: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 4px;
+	padding: 6px 12px;
+	font-size: 12px;
+	cursor: pointer;
+	transition: background-color 0.2s;
 }
 
 .error-retry-button:hover {
-  background-color: var(--interactive-accent-hover);
+	background-color: var(--interactive-accent-hover);
 }
 
 .error-retry-button:active {
-  background-color: var(--interactive-accent-active);
+	background-color: var(--interactive-accent-active);
 }
 
 /* Connection Status */
 .connection-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  margin: 4px 0;
-  transition: all 0.3s ease;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-radius: 6px;
+	font-size: 13px;
+	margin: 4px 0;
+	transition: all 0.3s ease;
 }
 
 .connection-status.connected {
-  background-color: rgba(0, 128, 0, 0.1);
-  border: 1px solid rgba(0, 128, 0, 0.3);
+	background-color: rgba(0, 128, 0, 0.1);
+	border: 1px solid rgba(0, 128, 0, 0.3);
 }
 
 .connection-status.disconnected {
-  background-color: rgba(255, 0, 0, 0.1);
-  border: 1px solid rgba(255, 0, 0, 0.3);
+	background-color: rgba(255, 0, 0, 0.1);
+	border: 1px solid rgba(255, 0, 0, 0.3);
 }
 
 .connection-indicator {
-  font-size: 12px;
-  line-height: 1;
+	font-size: 12px;
+	line-height: 1;
 }
 
 .connection-text {
-  color: var(--text-normal);
-  font-weight: 500;
+	color: var(--text-normal);
+	font-weight: 500;
 }
 
 .connection-error {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 4px;
-  font-style: italic;
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 4px;
+	font-style: italic;
 }
 
 /* Error Summary */
 .error-summary {
-  background-color: var(--background-secondary);
-  border-radius: 8px;
-  padding: 16px;
-  margin: 12px 0;
-  border: 1px solid var(--background-modifier-border);
+	background-color: var(--background-secondary);
+	border-radius: 8px;
+	padding: 16px;
+	margin: 12px 0;
+	border: 1px solid var(--background-modifier-border);
 }
 
 .error-summary-header {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--text-normal);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+	font-weight: 600;
+	font-size: 16px;
+	color: var(--text-normal);
+	margin-bottom: 12px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .error-summary-header::before {
-  content: "⚠️";
-  font-size: 18px;
+	content: '⚠️';
+	font-size: 18px;
 }
 
 .error-group {
-  margin-bottom: 12px;
+	margin-bottom: 12px;
 }
 
 .error-group:last-child {
-  margin-bottom: 0;
+	margin-bottom: 0;
 }
 
 .error-group-header {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
+	font-weight: 600;
+	font-size: 14px;
+	margin-bottom: 8px;
+	padding: 4px 8px;
+	border-radius: 4px;
 }
 
 .error-group.severity-low .error-group-header {
-  background-color: rgba(0, 100, 200, 0.1);
-  color: var(--color-blue);
+	background-color: rgba(0, 100, 200, 0.1);
+	color: var(--color-blue);
 }
 
 .error-group.severity-medium .error-group-header {
-  background-color: rgba(255, 165, 0, 0.1);
-  color: var(--color-orange);
+	background-color: rgba(255, 165, 0, 0.1);
+	color: var(--color-orange);
 }
 
 .error-group.severity-high .error-group-header {
-  background-color: rgba(255, 0, 0, 0.1);
-  color: var(--color-red);
+	background-color: rgba(255, 0, 0, 0.1);
+	color: var(--color-red);
 }
 
 .error-group.severity-critical .error-group-header {
-  background-color: rgba(139, 0, 0, 0.15);
-  color: var(--color-red);
+	background-color: rgba(139, 0, 0, 0.15);
+	color: var(--color-red);
 }
 
 .error-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+	list-style: none;
+	padding: 0;
+	margin: 0;
 }
 
 .error-list li {
-  padding: 4px 8px;
-  margin-bottom: 2px;
-  background-color: var(--background-primary);
-  border-radius: 4px;
-  font-size: 13px;
-  color: var(--text-normal);
+	padding: 4px 8px;
+	margin-bottom: 2px;
+	background-color: var(--background-primary);
+	border-radius: 4px;
+	font-size: 13px;
+	color: var(--text-normal);
 }
 
 .error-list .error-more {
-  color: var(--text-muted);
-  font-style: italic;
+	color: var(--text-muted);
+	font-style: italic;
 }
 
 /* Log Entry Display */
 .log-entry {
-  border-left: 3px solid;
-  padding: 8px 12px;
-  margin: 4px 0;
-  background-color: var(--background-secondary);
-  border-radius: 0 4px 4px 0;
-  font-family: var(--font-interface);
+	border-left: 3px solid;
+	padding: 8px 12px;
+	margin: 4px 0;
+	background-color: var(--background-secondary);
+	border-radius: 0 4px 4px 0;
+	font-family: var(--font-interface);
 }
 
 .log-entry.level-trace {
-  border-left-color: var(--text-faint);
+	border-left-color: var(--text-faint);
 }
 
 .log-entry.level-debug {
-  border-left-color: var(--color-cyan);
+	border-left-color: var(--color-cyan);
 }
 
 .log-entry.level-info {
-  border-left-color: var(--color-blue);
+	border-left-color: var(--color-blue);
 }
 
 .log-entry.level-warn {
-  border-left-color: var(--color-orange);
+	border-left-color: var(--color-orange);
 }
 
 .log-entry.level-error,
 .log-entry.level-fatal {
-  border-left-color: var(--color-red);
+	border-left-color: var(--color-red);
 }
 
 .log-header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 4px;
-  font-size: 11px;
-  color: var(--text-muted);
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	margin-bottom: 4px;
+	font-size: 11px;
+	color: var(--text-muted);
 }
 
 .log-timestamp {
-  font-family: var(--font-monospace);
+	font-family: var(--font-monospace);
 }
 
 .log-level {
-  font-weight: 600;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background-color: var(--background-primary);
+	font-weight: 600;
+	text-transform: uppercase;
+	padding: 2px 6px;
+	border-radius: 3px;
+	background-color: var(--background-primary);
 }
 
 .log-category {
-  font-family: var(--font-monospace);
-  background-color: var(--background-primary);
-  padding: 2px 6px;
-  border-radius: 3px;
+	font-family: var(--font-monospace);
+	background-color: var(--background-primary);
+	padding: 2px 6px;
+	border-radius: 3px;
 }
 
 .log-message {
-  font-size: 13px;
-  color: var(--text-normal);
-  line-height: 1.4;
+	font-size: 13px;
+	color: var(--text-normal);
+	line-height: 1.4;
 }
 
 .log-stack {
-  margin-top: 8px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
+	margin-top: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
 }
 
 .log-stack summary {
-  padding: 6px 8px;
-  background-color: var(--background-primary);
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-muted);
+	padding: 6px 8px;
+	background-color: var(--background-primary);
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--text-muted);
 }
 
 .log-stack pre {
-  margin: 0;
-  padding: 8px;
-  font-family: var(--font-monospace);
-  font-size: 11px;
-  color: var(--text-muted);
-  background-color: var(--background-primary-alt);
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+	margin: 0;
+	padding: 8px;
+	font-family: var(--font-monospace);
+	font-size: 11px;
+	color: var(--text-muted);
+	background-color: var(--background-primary-alt);
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .error-message {
-    padding: 10px;
-    margin: 6px 0;
-  }
-  
-  .error-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  
-  .error-actions {
-    flex-direction: column;
-  }
-  
-  .connection-status {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  
-  .log-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
+	.error-message {
+		padding: 10px;
+		margin: 6px 0;
+	}
+
+	.error-header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.error-actions {
+		flex-direction: column;
+	}
+
+	.connection-status {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.log-header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
 }
 
 /* Dark Theme Adjustments */
 .theme-dark .error-message.severity-low {
-  background-color: rgba(100, 150, 255, 0.1);
+	background-color: rgba(100, 150, 255, 0.1);
 }
 
 .theme-dark .error-message.severity-medium {
-  background-color: rgba(255, 200, 100, 0.1);
+	background-color: rgba(255, 200, 100, 0.1);
 }
 
 .theme-dark .error-message.severity-high {
-  background-color: rgba(255, 100, 100, 0.1);
+	background-color: rgba(255, 100, 100, 0.1);
 }
 
 .theme-dark .error-message.severity-critical {
-  background-color: rgba(200, 50, 50, 0.15);
+	background-color: rgba(200, 50, 50, 0.15);
 }
 
 /* High Contrast Mode */
 @media (prefers-contrast: high) {
-  .error-message {
-    border-width: 2px;
-  }
-  
-  .connection-status {
-    border-width: 2px;
-  }
-  
-  .log-entry {
-    border-left-width: 4px;
-  }
+	.error-message {
+		border-width: 2px;
+	}
+
+	.connection-status {
+		border-width: 2px;
+	}
+
+	.log-entry {
+		border-left-width: 4px;
+	}
 }
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-  .error-message.severity-critical {
-    animation: none;
-  }
-  
-  .connection-status {
-    transition: none;
-  }
+	.error-message.severity-critical {
+		animation: none;
+	}
+
+	.connection-status {
+		transition: none;
+	}
 }

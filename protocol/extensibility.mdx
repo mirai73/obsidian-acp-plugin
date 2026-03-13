@@ -1,6 +1,6 @@
 ---
-title: "Extensibility"
-description: "Adding custom data and capabilities"
+title: 'Extensibility'
+description: 'Adding custom data and capabilities'
 ---
 
 The Agent Client Protocol provides built-in extension mechanisms that allow implementations to add custom functionality while maintaining compatibility with the core protocol. These mechanisms ensure that Agents and Clients can innovate without breaking interoperability.
@@ -11,22 +11,22 @@ All types in the protocol include a `_meta` field with type `{ [key: string]: un
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "session/prompt",
-  "params": {
-    "sessionId": "sess_abc123def456",
-    "prompt": [
-      {
-        "type": "text",
-        "text": "Hello, world!"
-      }
-    ],
-    "_meta": {
-      "traceparent": "00-80e1afed08e019fc1110464cfa66635c-7a085853722dc6d2-01",
-      "zed.dev/debugMode": true
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"method": "session/prompt",
+	"params": {
+		"sessionId": "sess_abc123def456",
+		"prompt": [
+			{
+				"type": "text",
+				"text": "Hello, world!"
+			}
+		],
+		"_meta": {
+			"traceparent": "00-80e1afed08e019fc1110464cfa66635c-7a085853722dc6d2-01",
+			"zed.dev/debugMode": true
+		}
+	}
 }
 ```
 
@@ -53,12 +53,12 @@ In addition to the requests specified by the protocol, implementations **MAY** e
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "_zed.dev/workspace/buffers",
-  "params": {
-    "language": "rust"
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"method": "_zed.dev/workspace/buffers",
+	"params": {
+		"language": "rust"
+	}
 }
 ```
 
@@ -66,14 +66,14 @@ Upon receiving a custom request, implementations **MUST** respond accordingly wi
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "buffers": [
-      { "id": 0, "path": "/home/user/project/src/main.rs" },
-      { "id": 1, "path": "/home/user/project/src/editor.rs" }
-    ]
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"result": {
+		"buffers": [
+			{ "id": 0, "path": "/home/user/project/src/main.rs" },
+			{ "id": 1, "path": "/home/user/project/src/editor.rs" }
+		]
+	}
 }
 ```
 
@@ -81,12 +81,12 @@ If the receiving end doesn't recognize the custom method name, it should respond
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "error": {
-    "code": -32601,
-    "message": "Method not found"
-  }
+	"jsonrpc": "2.0",
+	"id": 1,
+	"error": {
+		"code": -32601,
+		"message": "Method not found"
+	}
 }
 ```
 
@@ -98,11 +98,11 @@ Custom notifications are regular JSON-RPC notifications that start with an under
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "_zed.dev/file_opened",
-  "params": {
-    "path": "/home/user/project/src/editor.rs"
-  }
+	"jsonrpc": "2.0",
+	"method": "_zed.dev/file_opened",
+	"params": {
+		"path": "/home/user/project/src/editor.rs"
+	}
 }
 ```
 
@@ -114,20 +114,20 @@ Implementations **SHOULD** use the `_meta` field in capability objects to advert
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": 1,
-    "agentCapabilities": {
-      "loadSession": true,
-      "_meta": {
-        "zed.dev": {
-          "workspace": true,
-          "fileNotifications": true
-        }
-      }
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 0,
+	"result": {
+		"protocolVersion": 1,
+		"agentCapabilities": {
+			"loadSession": true,
+			"_meta": {
+				"zed.dev": {
+					"workspace": true,
+					"fileNotifications": true
+				}
+			}
+		}
+	}
 }
 ```
 

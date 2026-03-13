@@ -15,12 +15,16 @@ Agent Client Protocol (ACP) integration for Obsidian, enabling AI coding assista
 After installing and enabling the plugin, you can access the configuration by opening up Obsidian's settings and navigating to the **ACP Chat Plugin** tab.
 
 ### 1. Agents Configuration
+
 You can register multiple local agents to connect to Obsidian via ACP. Provide the agent with a name, the executable command it uses to run, and any needed arguments.
+
 - Enable/disable each agent on the fly.
 - Provide environment variables or working directories for the agent run environment.
 
 ### 2. Permissions
+
 Security is a top priority; AI assistants can read and write files on disk! Adjust your boundaries using these configuration options:
+
 - **Allowed Paths**: Paths your agent can freely access.
 - **Denied Paths**: Paths strict off-limits to the agent.
 - **Read-Only Paths**: Paths the agent can read but not change.
@@ -28,20 +32,25 @@ Security is a top priority; AI assistants can read and write files on disk! Adju
 - **Log Operations**: Maintain a history of agent actions.
 
 ### 3. UI Settings
+
 Customize the visual footprint to match your needs:
+
 - Theme settings (dark, light, or auto) and custom colors.
 - Adjust base font sizes to display chats more legibly.
 - Toggle visibility of message timestamps.
 - Enable rendering markdown responses inside the chat.
 
 ### 4. Connection Configuration
+
 Configure the robustness of the connection with the running ACP clients.
+
 - Auto-reconnect handling and intervals.
 - Connection timeouts to prevent stalled commands.
 
 ## Available Commands
 
 Use the Obsidian Command Palette (`Cmd/Ctrl + P`) to launch actions:
+
 - `Open ACP Chat` / `Toggle ACP Chat Panel`: Quick bindings to reveal or focus the chat view.
 - `Focus ACP Chat Input`: Directly set focus onto the message box.
 - `Clear ACP Chat History`: Wipes the current chat history.

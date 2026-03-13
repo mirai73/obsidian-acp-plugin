@@ -1,6 +1,6 @@
 ---
-title: "Content"
-description: "Understanding content blocks in the Agent Client Protocol"
+title: 'Content'
+description: 'Understanding content blocks in the Agent Client Protocol'
 ---
 
 Content blocks represent displayable information that flows through the Agent Client Protocol. They provide a structured way to handle various types of user-facing content—whether it's text from language models, images for analysis, or embedded resources for context.
@@ -23,20 +23,20 @@ Plain text messages form the foundation of most interactions.
 
 ```json
 {
-  "type": "text",
-  "text": "What's the weather like today?"
+	"type": "text",
+	"text": "What's the weather like today?"
 }
 ```
 
 All Agents **MUST** support text content blocks when included in prompts.
 
 <ParamField path="text" type="string" required>
-  The text content to display
+	The text content to display
 </ParamField>
 
 <ParamField path="annotations" type="Annotations">
-  Optional metadata about how the content should be used or displayed. [Learn
-  more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
+	Optional metadata about how the content should be used or displayed. [Learn
+	more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
 </ParamField>
 
 ### Image Content <Icon icon="asterisk" size="14" />
@@ -45,9 +45,9 @@ Images can be included for visual context or analysis.
 
 ```json
 {
-  "type": "image",
-  "mimeType": "image/png",
-  "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB..."
+	"type": "image",
+	"mimeType": "image/png",
+	"data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB..."
 }
 ```
 
@@ -55,20 +55,20 @@ Images can be included for visual context or analysis.
 capability](./initialization#prompt-capabilities) when included in prompts.
 
 <ParamField path="data" type="string" required>
-  Base64-encoded image data
+	Base64-encoded image data
 </ParamField>
 
 <ParamField path="mimeType" type="string" required>
-  The MIME type of the image (e.g., "image/png", "image/jpeg")
+	The MIME type of the image (e.g., "image/png", "image/jpeg")
 </ParamField>
 
 <ParamField path="uri" type="string">
-  Optional URI reference for the image source
+	Optional URI reference for the image source
 </ParamField>
 
 <ParamField path="annotations" type="Annotations">
-  Optional metadata about how the content should be used or displayed. [Learn
-  more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
+	Optional metadata about how the content should be used or displayed. [Learn
+	more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
 </ParamField>
 
 ### Audio Content <Icon icon="asterisk" size="14" />
@@ -77,9 +77,9 @@ Audio data for transcription or analysis.
 
 ```json
 {
-  "type": "audio",
-  "mimeType": "audio/wav",
-  "data": "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAAB..."
+	"type": "audio",
+	"mimeType": "audio/wav",
+	"data": "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAAB..."
 }
 ```
 
@@ -87,16 +87,16 @@ Audio data for transcription or analysis.
 capability](./initialization#prompt-capabilities) when included in prompts.
 
 <ParamField path="data" type="string" required>
-  Base64-encoded audio data
+	Base64-encoded audio data
 </ParamField>
 
 <ParamField path="mimeType" type="string" required>
-  The MIME type of the audio (e.g., "audio/wav", "audio/mp3")
+	The MIME type of the audio (e.g., "audio/wav", "audio/mp3")
 </ParamField>
 
 <ParamField path="annotations" type="Annotations">
-  Optional metadata about how the content should be used or displayed. [Learn
-  more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
+	Optional metadata about how the content should be used or displayed. [Learn
+	more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
 </ParamField>
 
 ### Embedded Resource <Icon icon="asterisk" size="14" />
@@ -105,12 +105,12 @@ Complete resource contents embedded directly in the message.
 
 ```json
 {
-  "type": "resource",
-  "resource": {
-    "uri": "file:///home/user/script.py",
-    "mimeType": "text/x-python",
-    "text": "def hello():\n    print('Hello, world!')"
-  }
+	"type": "resource",
+	"resource": {
+		"uri": "file:///home/user/script.py",
+		"mimeType": "text/x-python",
+		"text": "def hello():\n    print('Hello, world!')"
+	}
 }
 ```
 
@@ -156,8 +156,8 @@ capability](./initialization#prompt-capabilities) when included in prompts.
 </ParamField>
 
 <ParamField path="annotations" type="Annotations">
-  Optional metadata about how the content should be used or displayed. [Learn
-  more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
+	Optional metadata about how the content should be used or displayed. [Learn
+	more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
 </ParamField>
 
 ### Resource Link
@@ -166,39 +166,39 @@ References to resources that the Agent can access.
 
 ```json
 {
-  "type": "resource_link",
-  "uri": "file:///home/user/document.pdf",
-  "name": "document.pdf",
-  "mimeType": "application/pdf",
-  "size": 1024000
+	"type": "resource_link",
+	"uri": "file:///home/user/document.pdf",
+	"name": "document.pdf",
+	"mimeType": "application/pdf",
+	"size": 1024000
 }
 ```
 
 <ParamField path="uri" type="string" required>
-  The URI of the resource
+	The URI of the resource
 </ParamField>
 
 <ParamField path="name" type="string" required>
-  A human-readable name for the resource
+	A human-readable name for the resource
 </ParamField>
 
 <ParamField path="mimeType" type="string">
-  The MIME type of the resource
+	The MIME type of the resource
 </ParamField>
 
 <ParamField path="title" type="string">
-  Optional display title for the resource
+	Optional display title for the resource
 </ParamField>
 
 <ParamField path="description" type="string">
-  Optional description of the resource contents
+	Optional description of the resource contents
 </ParamField>
 
 <ParamField path="size" type="integer">
-  Optional size of the resource in bytes
+	Optional size of the resource in bytes
 </ParamField>
 
 <ParamField path="annotations" type="Annotations">
-  Optional metadata about how the content should be used or displayed. [Learn
-  more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
+	Optional metadata about how the content should be used or displayed. [Learn
+	more](https://modelcontextprotocol.io/specification/2025-06-18/server/resources#annotations).
 </ParamField>

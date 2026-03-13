@@ -1,6 +1,6 @@
 ---
-title: "Initialization"
-description: "How all Agent Client Protocol connections begin"
+title: 'Initialization'
+description: 'How all Agent Client Protocol connections begin'
 ---
 
 {/* todo! link to all concepts */}
@@ -32,24 +32,24 @@ They **SHOULD** also provide a name and version to the Agent.
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 0,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": 1,
-    "clientCapabilities": {
-      "fs": {
-        "readTextFile": true,
-        "writeTextFile": true
-      },
-      "terminal": true
-    },
-    "clientInfo": {
-      "name": "my-client",
-      "title": "My Client",
-      "version": "1.0.0"
-    }
-  }
+	"jsonrpc": "2.0",
+	"id": 0,
+	"method": "initialize",
+	"params": {
+		"protocolVersion": 1,
+		"clientCapabilities": {
+			"fs": {
+				"readTextFile": true,
+				"writeTextFile": true
+			},
+			"terminal": true
+		},
+		"clientInfo": {
+			"name": "my-client",
+			"title": "My Client",
+			"version": "1.0.0"
+		}
+	}
 }
 ```
 
@@ -57,29 +57,29 @@ The Agent **MUST** respond with the chosen [protocol version](#protocol-version)
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": 0,
-  "result": {
-    "protocolVersion": 1,
-    "agentCapabilities": {
-      "loadSession": true,
-      "promptCapabilities": {
-        "image": true,
-        "audio": true,
-        "embeddedContext": true
-      },
-      "mcp": {
-        "http": true,
-        "sse": true
-      }
-    },
-    "agentInfo": {
-      "name": "my-agent",
-      "title": "My Agent",
-      "version": "1.0.0"
-    },
-    "authMethods": []
-  }
+	"jsonrpc": "2.0",
+	"id": 0,
+	"result": {
+		"protocolVersion": 1,
+		"agentCapabilities": {
+			"loadSession": true,
+			"promptCapabilities": {
+				"image": true,
+				"audio": true,
+				"embeddedContext": true
+			},
+			"mcp": {
+				"http": true,
+				"sse": true
+			}
+		},
+		"agentInfo": {
+			"name": "my-agent",
+			"title": "My Agent",
+			"version": "1.0.0"
+		},
+		"authMethods": []
+	}
 }
 ```
 
@@ -120,39 +120,39 @@ The Client **SHOULD** specify whether it supports the following capabilities:
 #### File System
 
 <ParamField path="readTextFile" type="boolean">
-  The `fs/read_text_file` method is available.
+	The `fs/read_text_file` method is available.
 </ParamField>
 
 <ParamField path="writeTextFile" type="boolean">
-  The `fs/write_text_file` method is available.
+	The `fs/write_text_file` method is available.
 </ParamField>
 
 <Card icon="file" horizontal href="./file-system">
-  Learn more about File System methods
+	Learn more about File System methods
 </Card>
 
 #### Terminal
 
 <ParamField path="terminal" type="boolean">
-  All `terminal/*` methods are available, allowing the Agent to execute and
-  manage shell commands.
+	All `terminal/*` methods are available, allowing the Agent to execute and
+	manage shell commands.
 </ParamField>
 
 <Card icon="terminal" horizontal href="./terminals">
-  Learn more about Terminals
+	Learn more about Terminals
 </Card>
 
 ### Agent Capabilities
 
 The Agent **SHOULD** specify whether it supports the following capabilities:
 
-<ResponseField name="loadSession" type="boolean" post={["default: false"]}>
-  The [`session/load`](./session-setup#loading-sessions) method is available.
+<ResponseField name="loadSession" type="boolean" post={['default: false']}>
+	The [`session/load`](./session-setup#loading-sessions) method is available.
 </ResponseField>
 
 <ResponseField name="promptCapabilities" type="PromptCapabilities Object">
-  Object indicating the different types of [content](./content) that may be
-  included in `session/prompt` requests.
+	Object indicating the different types of [content](./content) that may be
+	included in `session/prompt` requests.
 </ResponseField>
 
 #### Prompt capabilities
@@ -161,22 +161,22 @@ As a baseline, all Agents **MUST** support `ContentBlock::Text` and `ContentBloc
 
 Optionally, they **MAY** support richer types of [content](./content) by specifying the following capabilities:
 
-<ResponseField name="image" type="boolean" post={["default: false"]}>
-  The prompt may include `ContentBlock::Image`
+<ResponseField name="image" type="boolean" post={['default: false']}>
+	The prompt may include `ContentBlock::Image`
 </ResponseField>
 
-<ResponseField name="audio" type="boolean" post={["default: false"]}>
-  The prompt may include `ContentBlock::Audio`
+<ResponseField name="audio" type="boolean" post={['default: false']}>
+	The prompt may include `ContentBlock::Audio`
 </ResponseField>
 
-<ResponseField name="embeddedContext" type="boolean" post={["default: false"]}>
-  The prompt may include `ContentBlock::Resource`
+<ResponseField name="embeddedContext" type="boolean" post={['default: false']}>
+	The prompt may include `ContentBlock::Resource`
 </ResponseField>
 
 #### MCP capabilities
 
-<ResponseField name="http" type="boolean" post={["default: false"]}>
-  The Agent supports connecting to MCP servers over HTTP.
+<ResponseField name="http" type="boolean" post={['default: false']}>
+	The Agent supports connecting to MCP servers over HTTP.
 </ResponseField>
 
 <ResponseField name="sse" type="boolean" post={["default: false"]}>
@@ -193,8 +193,8 @@ As a baseline, all Agents **MUST** support `session/new`, `session/prompt`, `ses
 Optionally, they **MAY** support other session methods and notifications by specifying additional capabilities.
 
 <Note>
-  `session/load` is still handled by the top-level `load_session` capability.
-  This will be unified in future versions of the protocol.
+	`session/load` is still handled by the top-level `load_session` capability.
+	This will be unified in future versions of the protocol.
 </Note>
 
 ## Implementation Information
@@ -202,22 +202,22 @@ Optionally, they **MAY** support other session methods and notifications by spec
 Both Clients and Agents **SHOULD** provide information about their implementation in the `clientInfo` and `agentInfo` fields respectively. Both take the following three fields:
 
 <ParamField path="name" type="string">
-  Intended for programmatic or logical use, but can be used as a display name
-  fallback if title isn’t present.
+	Intended for programmatic or logical use, but can be used as a display name
+	fallback if title isn’t present.
 </ParamField>
 
 <ParamField path="title" type="string">
-  Intended for UI and end-user contexts — optimized to be human-readable and
-  easily understood. If not provided, the name should be used for display.
+	Intended for UI and end-user contexts — optimized to be human-readable and
+	easily understood. If not provided, the name should be used for display.
 </ParamField>
 
 <ParamField path="version" type="string">
-  Version of the implementation. Can be displayed to the user or used for
-  debugging or metrics purposes.
+	Version of the implementation. Can be displayed to the user or used for
+	debugging or metrics purposes.
 </ParamField>
 
 <Info>
-  Note: in future versions of the protocol, this information will be required.
+	Note: in future versions of the protocol, this information will be required.
 </Info>
 
 ---
