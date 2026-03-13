@@ -16,7 +16,8 @@ import {
   SessionModeState,
   SessionSetModeParams,
   ToolCall,
-  ToolCallUpdate
+  ToolCallUpdate,
+  AvailableCommand
 } from '../types/acp';
 import { JsonRpcClient } from './json-rpc-client';
 import { JsonRpcError, JsonRpcErrorCode } from './acp-method-handlers';
@@ -38,6 +39,7 @@ export interface SessionContext {
   pendingOperations: Set<string>;
   modes?: SessionModeState;
   toolCalls?: Map<string, ToolCall>;
+  availableCommands?: AvailableCommand[];
 }
 
 /**
@@ -340,6 +342,7 @@ export class SessionManagerImpl implements SessionManager {
         this.options.onStreamingChunk(sessionId, { type: 'mode', modeId: update.modeId });
       }
     } else if (update && update.sessionUpdate === 'tool_call') {
+      console.log('Received tool_call:', update);
       // Create new tool call
       if (!session.toolCalls) {
         session.toolCalls = new Map();
@@ -365,6 +368,7 @@ export class SessionManagerImpl implements SessionManager {
       }
       console.debug('Received tool_call:', update.toolCallId);
     } else if (update && update.sessionUpdate === 'tool_call_update') {
+      console.log('Received tool_call_update:', update);
       // Update existing tool call
       if (session.toolCalls && session.toolCalls.has(update.toolCallId)) {
         const existingCall = session.toolCalls.get(update.toolCallId)!;
@@ -393,11 +397,24 @@ export class SessionManagerImpl implements SessionManager {
       } else {
         console.warn(`Received tool_call_update for unknown tool call: ${update.toolCallId}`);
       }
+    } else if (update && update.sessionUpdate === 'available_commands_update') {
+      console.log('Received available_commands_update:', update);
+      // Update session context with available commands
+      session.availableCommands = update.availableCommands;
+      
+      // Notify UI
+      if (this.options.onStreamingChunk) {
+        this.options.onStreamingChunk(sessionId, { 
+          type: 'available_commands_update', 
+          commands: update.availableCommands 
+        });
+      }
+      console.debug('Received available commands for session:', sessionId);
     } else {
       // Handle other types of session updates
       console.log('Received session update:', {
         sessionId,
-        updateType: update?.sessionUpdate || 'unknown'
+        update
       });
     }
   }

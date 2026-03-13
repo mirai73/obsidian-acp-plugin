@@ -1081,83 +1081,87 @@ class ACPChatSettingTab extends PluginSettingTab {
 		}
 
 		this.plugin.settings.agents.forEach((agent, index) => {
-			const agentContainer = container.createDiv("agent-item");
-			
-			// Agent header with name and status
-			const headerEl = agentContainer.createDiv("agent-header");
-			headerEl.createEl("h4", { text: agent.name });
-			
-			const statusEl = headerEl.createEl("span", { cls: "agent-status" });
 			const connectionStatus = this.plugin.acpClient?.getConnectionStatus(agent.id);
-			const statusText = connectionStatus?.connected ? "connected" : "disconnected";
-			statusEl.setText(statusText);
-			statusEl.addClass(`status-${statusText}`);
-
-			// Agent details
-			const detailsEl = agentContainer.createDiv("agent-details");
-			detailsEl.createEl("div", { text: `Command: ${agent.command}` });
-			detailsEl.createEl("div", { text: `Args: ${agent.args.join(" ")}` });
+			const isConnected = connectionStatus?.connected;
+			
+			const descFragment = document.createDocumentFragment();
+			
 			if (agent.workingDirectory) {
-				detailsEl.createEl("div", { text: `Working Directory: ${agent.workingDirectory}` });
+				descFragment.appendChild(document.createElement("br"));
+				descFragment.appendText(`Working Directory: ${agent.workingDirectory}`);
 			}
+			descFragment.appendChild(document.createElement("br"));
+			
+			const statusSpan = document.createElement("span");
+			statusSpan.style.fontWeight = "bold";
+			statusSpan.style.color = isConnected ? "var(--color-green)" : "var(--text-muted)";
+			statusSpan.textContent = isConnected ? "CONNECTED" : "DISCONNECTED";
+			descFragment.appendChild(statusSpan);
 
-			// Agent controls
-			const controlsEl = agentContainer.createDiv("agent-controls");
-			
+			const setting = new Setting(container)
+				.setName(agent.name)
+				.setDesc(descFragment);
+				
+			// Align items to top so buttons are on the same row as the name
+			setting.settingEl.style.alignItems = "flex-start";
+
 			// Enable/Disable toggle
-			const toggleContainer = controlsEl.createDiv("checkbox-container");
-			const toggleInput = toggleContainer.createEl("input", { type: "checkbox" });
-			const toggleId = `agent-enable-${agent.id}`;
-			toggleInput.id = toggleId;
-			toggleInput.checked = agent.enabled;
-			
-			const toggleLabel = toggleContainer.createEl("label", { 
-				text: "Enabled",
-				attr: { for: toggleId }
-			});
-			
-			toggleInput.addEventListener("change", async () => {
-				agent.enabled = toggleInput.checked;
-				await this.plugin.saveSettings();
-				// Refresh to reflect changes if necessary
-				this.refreshAgentList(container);
+			setting.addToggle(toggle => {
+				toggle.setValue(agent.enabled)
+					.setTooltip(agent.enabled ? "Disable Agent" : "Enable Agent")
+					.onChange(async (value) => {
+						agent.enabled = value;
+						await this.plugin.saveSettings();
+						// Refresh to reflect changes
+						this.refreshAgentList(container);
+					});
 			});
 
 			// Connect/Disconnect button
-			const connectButton = controlsEl.createEl("button", { 
-				text: connectionStatus?.connected ? "Disconnect" : "Connect",
-				cls: connectionStatus?.connected ? "" : "mod-cta"
-			});
-			connectButton.addEventListener("click", async () => {
-				connectButton.disabled = true;
-				try {
-					if (connectionStatus?.connected) {
-						await this.plugin.acpClient?.stopAgentById(agent.id);
-					} else {
-						await this.plugin.acpClient?.startAgentWithConfig(agent);
-					}
-				} finally {
-					this.refreshAgentList(container);
+			setting.addButton(button => {
+				button.setButtonText(isConnected ? "Disconnect" : "Connect")
+					.setTooltip(isConnected ? "Disconnect from agent" : "Connect to agent")
+					.onClick(async () => {
+						button.setDisabled(true);
+						try {
+							if (isConnected) {
+								await this.plugin.acpClient?.stopAgentById(agent.id);
+							} else {
+								await this.plugin.acpClient?.startAgentWithConfig(agent);
+							}
+						} catch(e) {
+							console.error(e);
+						} finally {
+							this.refreshAgentList(container);
+						}
+					});
+				
+				if (!isConnected) {
+					button.setCta();
 				}
 			});
 
 			// Edit button
-			const editButton = controlsEl.createEl("button", { text: "Edit" });
-			editButton.addEventListener("click", () => {
-				this.showEditAgentModal(agent, index);
+			setting.addButton(button => {
+				button.setIcon("pencil")
+					.setTooltip("Edit Agent Configuration")
+					.onClick(() => {
+						this.showEditAgentModal(agent, index);
+					});
 			});
 
 			// Delete button
-			const deleteButton = controlsEl.createEl("button", { 
-				text: "Delete",
-				cls: "mod-warning"
-			});
-			deleteButton.addEventListener("click", async () => {
-				if (confirm(`Are you sure you want to delete agent "${agent.name}"?`)) {
-					this.plugin.settings.agents.splice(index, 1);
-					await this.plugin.saveSettings();
-					this.refreshAgentList(container);
-				}
+			setting.addButton(button => {
+				button.setIcon("trash")
+					.setTooltip("Delete Agent")
+					.setClass("mod-warning")
+					.onClick(async () => {
+						if (confirm(`Are you sure you want to delete agent "${agent.name}"?`)) {
+							this.plugin.settings.agents.splice(index, 1);
+							await this.plugin.saveSettings();
+							this.refreshAgentList(container);
+						}
+					});
 			});
 		});
 	}

@@ -3,8 +3,9 @@
  * Manages the lifecycle of ACP agent child processes
  */
 
-import { ChildProcess, spawn, SpawnOptions } from 'child_process';
+import { ChildProcess, spawn, SpawnOptions, exec } from 'child_process';
 import { EventEmitter } from 'events';
+import * as os from 'os';
 
 export interface AgentConfig {
   id: string;
@@ -225,17 +226,15 @@ export class AgentProcessManager extends EventEmitter {
    * Spawn a child process for an agent
    */
   private async spawnProcess(config: AgentConfig): Promise<ChildProcess> {
-    return new Promise<ChildProcess>((resolve, reject) => {
-      // Ensure common installation paths are included, especially for macOS GUI apps like Obsidian
-      const extendedPath = process.env.PATH
-        ? `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:~/.bun/bin:~/.cargo/bin:~/.local/bin`
-        : '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin';
+    return new Promise<ChildProcess>(async (resolve, reject) => {
+      // Fetch full interactive path so GUI apps like Obsidian get the real PATH
+      const fullPath = await this.getUserPath();
 
       const options: SpawnOptions = {
         cwd: config.workingDirectory,
         env: {
           ...process.env,
-          PATH: extendedPath,
+          PATH: fullPath,
           ...config.environment
         },
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -341,5 +340,38 @@ export class AgentProcessManager extends EventEmitter {
         this.emit('health-check', agentId, health);
       }
     }
+  }
+  
+  /**
+   * Helper to fetch the actual user PATH by invoking the shell
+   */
+  private async getUserPath(): Promise<string> {
+    if (process.platform === 'win32') {
+      return process.env.PATH || '';
+    }
+
+    return new Promise<string>((resolve) => {
+      const shell = process.env.SHELL || '/bin/zsh';
+      // Run an interactive login shell to execute `echo $PATH`
+      exec(`${shell} -ilc 'echo $PATH'`, { timeout: 2000 }, (error, stdout) => {
+        if (error || !stdout) {
+          // If execution fails, default to process.env.PATH plus standard homebrew/local paths
+          const homeDir = os.homedir();
+          resolve([
+            process.env.PATH,
+            '/usr/local/bin',
+            '/opt/homebrew/bin',
+            '/opt/homebrew/sbin',
+            `${homeDir}/.local/bin`,
+            `${homeDir}/.cargo/bin`
+          ].filter(Boolean).join(':'));
+          return;
+        }
+
+        // Split by newlines, grab the last one in case there are other shell initialization outputs
+        const lines = stdout.trim().split('\n');
+        resolve(lines[lines.length - 1].trim());
+      });
+    });
   }
 }

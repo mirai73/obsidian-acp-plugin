@@ -162,6 +162,15 @@ export interface SessionRequestPermissionResult {
   };
 }
 
+// Commands
+export interface AvailableCommand {
+  name: string;
+  description: string;
+  input?: {
+    hint: string;
+  };
+}
+
 // Session updates (notifications)
 export type ToolKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'other';
 export type ToolCallStatus = 'pending' | 'in_progress' | 'completed' | 'failed';

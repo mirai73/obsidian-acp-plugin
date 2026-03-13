@@ -33,17 +33,12 @@ export class ChatView extends ItemView implements ChatInterface {
   private commandDropdown: HTMLElement | null = null;
   private selectedCommandIndex: number = -1;
   private filteredCommands: any[] = [];
-  private readonly commands = [
-    { text: 'Explain code', command: '/explain' },
-    { text: 'Fix errors', command: '/fix' },
-    { text: 'Add tests', command: '/test' },
-    { text: 'Optimize', command: '/optimize' },
-    { text: 'Document', command: '/document' },
-    { text: 'Refactor', command: '/refactor' },
-    { text: 'File operations', prompt: 'What file operations can you help me with?' },
-    { text: 'Search code', prompt: 'How can you help me search through my codebase?' },
-    { text: 'Web search', prompt: 'How can you help with web search and research?' }
-  ];
+  private readonly defaultCommands = [];
+  private agentCommands: any[] = [];
+
+  private get commands() {
+    return [...this.defaultCommands, ...this.agentCommands];
+  }
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -135,6 +130,15 @@ export class ChatView extends ItemView implements ChatInterface {
         this.availableModes = sessionInfo.modes.availableModes;
         this.currentModeId = sessionInfo.modes.currentModeId;
         this.updateModeSelector();
+      }
+      
+      if (sessionInfo && sessionInfo.availableCommands) {
+        this.agentCommands = sessionInfo.availableCommands.map(c => ({
+          text: c.description,
+          command: `/${c.name}`
+        }));
+      } else {
+        this.agentCommands = [];
       }
     }
 
@@ -341,8 +345,11 @@ export class ChatView extends ItemView implements ChatInterface {
       return;
     }
 
-    // Check for slash commands
-    if (text.startsWith('/')) {
+    // Check for built-in slash commands
+    const builtInCommands = ['/explain', '/fix', '/test', '/optimize', '/document', '/refactor', '/help', '/mode'];
+    const isBuiltIn = builtInCommands.some(cmd => text.toLowerCase().startsWith(cmd));
+    
+    if (text.startsWith('/') && isBuiltIn) {
       this.handleSlashCommand(text);
       return;
     }
@@ -473,6 +480,14 @@ export class ChatView extends ItemView implements ChatInterface {
   private handleStreamingChunk(sessionId: string, chunk: any): void {
     if (!chunk) return;
 
+    if (chunk.type === 'available_commands_update') {
+      this.agentCommands = (chunk.commands || []).map((c: any) => ({
+        text: c.description,
+        command: `/${c.name}`
+      }));
+      return;
+    }
+
     if (chunk.type === 'mode') {
       this.currentModeId = chunk.modeId;
       this.updateModeSelector();
@@ -500,8 +515,7 @@ export class ChatView extends ItemView implements ChatInterface {
       // Create new streaming message container
       streamingContainer = this.messagesContainer.createDiv('acp-message acp-message-assistant streaming-message');
       
-      const messageContent = streamingContainer.createDiv('acp-message-content');
-      messageContent.className = 'message-content';
+      const messageContent = streamingContainer.createDiv('acp-message-content message-content');
     }
 
     // Append the chunk text to the streaming message
@@ -530,6 +544,7 @@ export class ChatView extends ItemView implements ChatInterface {
       if (messageContent && messageContent.textContent) {
         const finalContent = messageContent.textContent;
         messageContent.innerHTML = '';
+        messageContent.addClass('acp-markdown-content');
         this.renderMarkdownContent(finalContent, messageContent);
       }
     }
@@ -1025,16 +1040,14 @@ export class ChatView extends ItemView implements ChatInterface {
   private selectCommand(action: any): void {
     if (action.command) {
       this.inputField.value = action.command + ' ';
-      // If we want to auto-execute, we can call handleSlashCommand here
-      // But usually it's better to just fill the input
-      this.handleSlashCommand(action.command);
+      this.autoResizeTextarea();
+      this.inputField.focus();
     } else if (action.prompt) {
       this.inputField.value = action.prompt;
       this.autoResizeTextarea();
       this.inputField.focus();
     }
     this.hideCommandDropdown();
-    this.autoResizeTextarea();
   }
 
 
@@ -1044,6 +1057,7 @@ export class ChatView extends ItemView implements ChatInterface {
   private async startNewConversation(): Promise<void> {
     this.currentSessionId = null;
     this.messageHistory = [];
+    this.agentCommands = [];
     this.messagesContainer.empty();
     await this.ensureSession();
     this.scrollToBottom();
@@ -1084,6 +1098,15 @@ export class ChatView extends ItemView implements ChatInterface {
       this.availableModes = session.modes.availableModes;
       this.currentModeId = session.modes.currentModeId;
       this.updateModeSelector();
+    }
+
+    if (session.availableCommands) {
+      this.agentCommands = session.availableCommands.map(c => ({
+        text: c.description,
+        command: `/${c.name}`
+      }));
+    } else {
+      this.agentCommands = [];
     }
 
     this.scrollToBottom();

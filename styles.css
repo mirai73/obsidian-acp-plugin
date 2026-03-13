@@ -512,7 +512,8 @@ body {
   position: relative;
   animation: acp-slide-up-fade 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   box-shadow: var(--acp-shadow-light);
-
+  min-width: 0;
+  max-width: 100%;
 }
 
 .acp-message:hover {
@@ -732,6 +733,12 @@ body {
   color: var(--acp-text-normal);
   line-height: var(--line-height-normal);
   font-family: var(--acp-font-text);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.acp-chat-wrapper code {
+  overflow-x: auto !important;
 }
 
 .acp-text-content {
@@ -742,6 +749,9 @@ body {
 /* Enhanced Markdown Content Styling */
 .acp-markdown-content {
   color: var(--acp-text-normal);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 .acp-markdown-content p {
@@ -763,13 +773,16 @@ body {
   border-radius: var(--acp-radius-small);
   font-family: var(--acp-font-monospace);
   font-size: var(--code-size);
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
 }
 
 .acp-markdown-content pre {
   background: var(--code-background);
   padding: var(--size-4-3);
   border-radius: var(--acp-radius-medium);
-  overflow-x: auto;
+  overflow-x: auto !important;
+  max-width: 100%;
   margin: var(--size-4-2) 0;
   border: 1px solid var(--acp-border-color);
 }
@@ -778,6 +791,10 @@ body {
   background: none;
   padding: 0;
   border: none;
+  display: block;
+  overflow-x: auto;
+  white-space: pre !important;
+  word-break: normal !important;
 }
 
 .acp-markdown-content blockquote {
@@ -919,9 +936,7 @@ body {
   bottom: 40px;
   /* Positioned above the button */
   right: 0;
-  background: var(--acp-glass-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: var(--background-primary);
   border: 1px solid var(--acp-glass-border);
   border-radius: var(--acp-radius-large);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
