@@ -12,6 +12,7 @@ import {
 
 export interface SessionManager {
 	createSession(
+		agentId: string,
 		cwd?: string,
 		mcpServers?: SessionNewParams['mcpServers']
 	): Promise<{ sessionId: string }>;

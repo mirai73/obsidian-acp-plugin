@@ -31,6 +31,7 @@ export interface SessionManagerOptions {
 
 export interface SessionContext {
 	sessionId: string; // The agent's session ID - the only one we need
+	agentId: string; // The agent this session belongs to
 	capabilities: string[];
 	messages: Message[];
 	createdAt: Date;
@@ -79,6 +80,7 @@ export class SessionManagerImpl implements SessionManager {
 	 * Create a new session with optional capabilities
 	 */
 	async createSession(
+		agentId: string,
 		cwd?: string,
 		mcpServers?: SessionNewParams['mcpServers']
 	): Promise<{ sessionId: string }> {
@@ -118,6 +120,7 @@ export class SessionManagerImpl implements SessionManager {
 			// Create session context using the agent's session ID
 			const sessionContext: SessionContext = {
 				sessionId: result.sessionId, // Use the agent's session ID
+				agentId,
 				capabilities: [],
 				messages: [],
 				createdAt: new Date(),

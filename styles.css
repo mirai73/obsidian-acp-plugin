@@ -1107,8 +1107,30 @@ body {
     margin-bottom: var(--size-4-2);
   }
 }
+
+/* Agent Suggestion Modal */
+.acp-agent-suggestion {
+	padding: 8px 0px;
+}
+
+.acp-agent-title {
+	font-weight: 600;
+	font-size: 1em;
+	color: var(--text-normal);
+}
+
+.acp-agent-meta {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
 .acp-agent-selector.is-readonly {
-  pointer-events: none;
-  opacity: 0.8;
-  cursor: default;
+	pointer-events: none !important;
+	opacity: 0.9;
+	cursor: default;
+	background-image: none !important; /* Remove dropdown arrow */
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
 }

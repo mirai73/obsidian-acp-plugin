@@ -71,7 +71,7 @@ describe('SessionManager', () => {
 
 	describe('createSession', () => {
 		it('should create a new session with unique ID', async () => {
-			const result = await sessionManager.createSession();
+			const result = await sessionManager.createSession("test-agent");
 
 			expect(result).toHaveProperty('sessionId');
 			expect(typeof result.sessionId).toBe('string');
@@ -87,7 +87,7 @@ describe('SessionManager', () => {
 				models: { currentModelId: 'auto', availableModels: [] },
 			});
 
-			const result = await sessionManager.createSession(cwd, mcpServers);
+			const result = await sessionManager.createSession("test-agent", cwd, mcpServers);
 
 			expect(result).toHaveProperty('sessionId');
 			expect(mockJsonRpcClient.sendRequest).toHaveBeenCalledWith(
@@ -103,24 +103,24 @@ describe('SessionManager', () => {
 			);
 
 			// Should throw error if agent communication fails
-			await expect(sessionManager.createSession(cwd)).rejects.toThrow();
+			await expect(sessionManager.createSession("test-agent", cwd)).rejects.toThrow();
 		});
 
 		it('should enforce maximum session limit', async () => {
 			// Create maximum number of sessions
 			for (let i = 0; i < 5; i++) {
-				await sessionManager.createSession();
+				await sessionManager.createSession("test-agent");
 			}
 
 			// Attempt to create one more should fail
-			await expect(sessionManager.createSession()).rejects.toThrow(
+			await expect(sessionManager.createSession("test-agent")).rejects.toThrow(
 				JsonRpcError
 			);
 		});
 
 		it('should create multiple sessions with unique IDs', async () => {
-			const session1 = await sessionManager.createSession();
-			const session2 = await sessionManager.createSession();
+			const session1 = await sessionManager.createSession("test-agent");
+			const session2 = await sessionManager.createSession("test-agent");
 
 			expect(session1.sessionId).not.toBe(session2.sessionId);
 		});
@@ -131,7 +131,7 @@ describe('SessionManager', () => {
 		let testMessages: Message[];
 
 		beforeEach(async () => {
-			const session = await sessionManager.createSession();
+			const session = await sessionManager.createSession("test-agent");
 			sessionId = session.sessionId;
 
 			testMessages = [
@@ -217,7 +217,7 @@ describe('SessionManager', () => {
 		let sessionId: string;
 
 		beforeEach(async () => {
-			const session = await sessionManager.createSession();
+			const session = await sessionManager.createSession("test-agent");
 			sessionId = session.sessionId;
 		});
 
@@ -280,7 +280,7 @@ describe('SessionManager', () => {
 		let sessionId: string;
 
 		beforeEach(async () => {
-			const session = await sessionManager.createSession();
+			const session = await sessionManager.createSession("test-agent");
 			sessionId = session.sessionId;
 		});
 
@@ -359,7 +359,7 @@ describe('SessionManager', () => {
 				models: { currentModelId: 'auto', availableModels: [] },
 			});
 
-			const session = await sessionManager.createSession(cwd);
+			const session = await sessionManager.createSession("test-agent", cwd);
 
 			const sessionInfo = sessionManager.getSessionInfo(session.sessionId);
 
@@ -380,8 +380,8 @@ describe('SessionManager', () => {
 
 	describe('getActiveSessions', () => {
 		it('should return only active sessions', async () => {
-			const session1 = await sessionManager.createSession();
-			const session2 = await sessionManager.createSession();
+			const session1 = await sessionManager.createSession("test-agent");
+			const session2 = await sessionManager.createSession("test-agent");
 
 			// Cancel one session
 			await sessionManager.cancelSession(session2.sessionId);
@@ -401,8 +401,8 @@ describe('SessionManager', () => {
 
 	describe('getStats', () => {
 		it('should return session statistics', async () => {
-			await sessionManager.createSession();
-			await sessionManager.createSession();
+			await sessionManager.createSession("test-agent");
+			await sessionManager.createSession("test-agent");
 
 			const stats = sessionManager.getStats();
 
@@ -414,8 +414,8 @@ describe('SessionManager', () => {
 
 	describe('shutdown', () => {
 		it('should cancel all active sessions', async () => {
-			const session1 = await sessionManager.createSession();
-			const session2 = await sessionManager.createSession();
+			const session1 = await sessionManager.createSession("test-agent");
+			const session2 = await sessionManager.createSession("test-agent");
 
 			sessionManager.shutdown();
 
