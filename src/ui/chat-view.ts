@@ -994,7 +994,7 @@ export class ChatView extends ItemView implements ChatInterface {
     });
   }
 
-  private getAgentName(agentId?: string): string | undefined {
+  private getAgentName(agentId?: string | null): string | undefined {
     if (!this.acpClient || !agentId) return;
     return this.acpClient.getConnectionStatus(agentId).agentName;
   }
