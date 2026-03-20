@@ -140,12 +140,10 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 	/**
 	 * Start an agent process and establish connection
 	 */
-	async startAgent(agentPath: string, args: string[]): Promise<void> {
-		// Create agent config
-		const agentId = `agent-${Date.now()}`;
+	async startAgent(agentId: string, agentPath: string, args: string[]): Promise<void> {
 		const config: AgentConfig = {
 			id: agentId,
-			name: `Agent ${agentId}`,
+			name: agentId,
 			command: agentPath,
 			args,
 			enabled: true,

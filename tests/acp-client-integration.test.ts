@@ -98,7 +98,7 @@ describe('ACPClientImpl Integration', () => {
 		it('should start and connect to an agent', async () => {
 			jest.useFakeTimers();
 
-			const startPromise = acpClient.startAgent('node', ['test-agent.js']);
+			const startPromise = acpClient.startAgent('test-agent', 'node', ['test-agent.js']);
 
 			// Advance past spawn delay
 			jest.advanceTimersByTime(1100);
@@ -121,7 +121,7 @@ describe('ACPClientImpl Integration', () => {
 		it('should handle agent disconnection', async () => {
 			jest.useFakeTimers();
 
-			const startPromise = acpClient.startAgent('node', ['test-agent.js']);
+			const startPromise = acpClient.startAgent('test-agent', 'node', ['test-agent.js']);
 			jest.advanceTimersByTime(1100);
 			jest.advanceTimersByTime(100);
 			await startPromise;
@@ -283,7 +283,7 @@ describe('ACPClientImpl Integration', () => {
 		it('should provide client statistics', async () => {
 			jest.useFakeTimers();
 
-			const startPromise = acpClient.startAgent('node', ['test-agent.js']);
+			const startPromise = acpClient.startAgent('test-agent', 'node', ['test-agent.js']);
 			jest.advanceTimersByTime(1100);
 			jest.advanceTimersByTime(100);
 			await startPromise;

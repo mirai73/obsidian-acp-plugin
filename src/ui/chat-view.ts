@@ -120,6 +120,11 @@ export class ChatView extends ItemView implements ChatInterface {
     // Don't set JSON-RPC client here - we'll set it when needed
   }
 
+  async initSession(agentId: string): Promise<void> {
+    this.currentAgentId = agentId;
+    await this.ensureSession();
+  }
+
   private async ensureSession(): Promise<string> {
     if (!this.sessionManager || !this.acpClient) {
       throw new Error('Session manager or ACP client not initialized');

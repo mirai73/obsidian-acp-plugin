@@ -4,6 +4,7 @@
 
 export interface PluginSettings {
 	agents: AgentConfig[];
+	defaultAgentId: string | null;
 	permissions: PermissionConfig;
 	ui: UIConfig;
 	connection: ConnectionConfig;
@@ -52,6 +53,7 @@ export interface ConnectionConfig {
 
 export const DEFAULT_SETTINGS: Partial<PluginSettings> = {
 	agents: [],
+	defaultAgentId: null,
 	permissions: {
 		allowedPaths: [],
 		deniedPaths: [],

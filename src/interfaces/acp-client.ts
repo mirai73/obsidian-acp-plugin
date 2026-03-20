@@ -14,7 +14,7 @@ import {
 
 export interface ACPClient {
 	// Process management
-	startAgent(agentPath: string, args: string[]): Promise<void>;
+	startAgent(agentId: string, agentPath: string, args: string[]): Promise<void>;
 	stopAgent(): Promise<void>;
 
 	// JSON-RPC communication
