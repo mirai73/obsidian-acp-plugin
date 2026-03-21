@@ -151,6 +151,7 @@ export class ChatView extends ItemView implements ChatInterface {
         agentId,
         vaultPath
       );
+      this.currentAgentId = agentId;
       this.currentSessionId = session.sessionId;
 
       // Update agent name in UI
