@@ -442,7 +442,6 @@ export class ChatView extends ItemView implements ChatInterface {
       const result = await this.sessionManager.sendPrompt(sessionId, [
         userMessageForAgent,
       ]);
-
       // Finalize any streaming message that was being displayed
       this.finalizeStreamingMessage();
 
@@ -647,7 +646,7 @@ export class ChatView extends ItemView implements ChatInterface {
     messageEl.addClass(`acp-message-${message.role}`);
 
     // Add timestamp if enabled
-    const settings = (this.app as any).plugins?.plugins?.['acp-chat-plugin']
+    const settings = (this.app as any).plugins?.plugins?.['acp-chat-assistant']
       ?.settings;
     if (settings?.ui?.showTimestamps !== false) {
       const timestamp = messageEl.createDiv('acp-message-timestamp');
@@ -1001,8 +1000,22 @@ export class ChatView extends ItemView implements ChatInterface {
   }
 
   private getAgentName(agentId?: string | null): string | undefined {
-    if (!this.acpClient || !agentId) return;
-    return this.acpClient.getConnectionStatus(agentId).agentName;
+    if (!agentId) return undefined;
+
+    if (this.acpClient) {
+      const status = this.acpClient.getConnectionStatus(agentId);
+      if (status.agentName) return status.agentName;
+    }
+
+    // Fallback to settings if agent is disconnected
+    const settings = (this.app as any).plugins?.plugins?.['acp-chat-assistant']
+      ?.settings;
+    if (settings?.agents) {
+      const agent = settings.agents.find((a: any) => a.id === agentId);
+      if (agent) return agent.name;
+    }
+
+    return agentId;
   }
 
   private updateAgentNameDisplay(): void {

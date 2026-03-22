@@ -9,7 +9,6 @@ import {
 import { ChatView, CHAT_VIEW_TYPE } from './src/ui/chat-view';
 import { ACPClientImpl } from './src/core/acp-client-impl';
 import { ObsidianFileOperationsHandler } from './src/core/obsidian-file-operations';
-import { PermissionDialog } from './src/ui/permission-dialog';
 import { PermissionManagerImpl } from './src/core/permission-manager';
 import { ACPSessionHandlers } from './src/core/acp-method-handlers';
 import {
@@ -454,33 +453,6 @@ export default class ACPChatPlugin extends Plugin {
     params: SessionRequestPermissionParams
   ): Promise<SessionRequestPermissionResult> {
     try {
-      // Use modal dialog if configured to show detailed permission dialog
-      if (this.settings.permissions?.showPermissionDialog) {
-        const dialog = new PermissionDialog(this.app, {
-          sessionId: params.sessionId,
-          toolCall: params.toolCall,
-          options: params.options,
-        });
-
-        const selectedId = await dialog.showAndWait();
-
-        if (selectedId === null) {
-          return {
-            outcome: {
-              outcome: 'cancelled',
-            },
-          };
-        }
-
-        return {
-          outcome: {
-            outcome: 'selected',
-            optionId: selectedId,
-          },
-        };
-      }
-
-      // Otherwise use inline chat request (compact mode)
       // Ensure chat view is open and revealed
       if (!this.chatView) {
         await this.openChatView();
@@ -514,7 +486,7 @@ export default class ACPChatPlugin extends Plugin {
       // Fallback to auto-reject if no UI available
       return {
         outcome: {
-          outcome: 'declined',
+          outcome: 'cancelled',
         },
       };
     } catch (error) {
@@ -522,8 +494,7 @@ export default class ACPChatPlugin extends Plugin {
       // Default to rejection on error
       return {
         outcome: {
-          outcome: 'selected',
-          optionId: 'reject_once',
+          outcome: 'cancelled',
         },
       };
     }

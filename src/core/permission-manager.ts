@@ -61,19 +61,19 @@ export class PermissionManagerImpl implements PermissionManager {
     // Denied paths take precedence
     if (this.isResourceDenied(resource)) {
       this.logOperation(operation, resource, false);
-      return { outcome: { outcome: 'declined' } };
+      return { outcome: { outcome: 'cancelled' } };
     }
 
     // Check for read-only paths when doing a write operation
     if (this.isWriteOperation(operation) && this.isResourceReadOnly(resource)) {
       this.logOperation(operation, resource, false);
-      return { outcome: { outcome: 'declined' } };
+      return { outcome: { outcome: 'cancelled' } };
     }
 
     // Check if it's allowed
     if (!this.isResourceAllowed(resource)) {
       this.logOperation(operation, resource, false);
-      return { outcome: { outcome: 'declined' } };
+      return { outcome: { outcome: 'cancelled' } };
     }
 
     // If no user confirmation is required, auto-allow!
@@ -88,7 +88,7 @@ export class PermissionManagerImpl implements PermissionManager {
           outcome: { outcome: 'selected', optionId: allowOption.optionId },
         };
       }
-      return { outcome: { outcome: 'declined' } };
+      return { outcome: { outcome: 'cancelled' } };
     }
 
     if (!this.userConfirmationHandler) {
@@ -125,6 +125,7 @@ export class PermissionManagerImpl implements PermissionManager {
    * Log an operation for audit purposes
    */
   logOperation(operation: string, resource: string, granted: boolean): void {
+    console.log({ operation, resource, granted });
     if (!this.config.logOperations) {
       return;
     }
