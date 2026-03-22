@@ -21,6 +21,7 @@ import {
 import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
 import { SessionManagerImpl, SessionContext } from '../core/session-manager';
+import { ACPClient } from 'src/interfaces/acp-client';
 
 export const CHAT_VIEW_TYPE = 'acp-chat-view';
 
@@ -31,6 +32,11 @@ export class ChatView extends ItemView implements ChatInterface {
   private sendButton: HTMLButtonElement;
   private statusIndicator: HTMLElement;
   private connectionStatus: ConnectionStatus = { connected: false };
+  private isProcessing = false;
+  private pendingPermissionResolvers = new Map<
+    string,
+    (id: string | null) => void
+  >();
   private acpClient: ACPClientImpl | null = null;
   private sessionManager: SessionManagerImpl | null = null;
   private currentSessionId: string | null = null;
@@ -48,6 +54,7 @@ export class ChatView extends ItemView implements ChatInterface {
   private filteredCommands: any[] = [];
   private readonly defaultCommands = [];
   private agentCommands: any[] = [];
+  private ensureSessionPromise: Promise<string> | null = null;
 
   private get commands() {
     return [...this.defaultCommands, ...this.agentCommands];
@@ -89,6 +96,7 @@ export class ChatView extends ItemView implements ChatInterface {
 
     // Proactively try to ensure session if already connected
     if (this.connectionStatus.connected) {
+      console.log('OnOpen');
       this.ensureSession().catch((err) =>
         console.error('Failed to ensure session on open:', err)
       );
@@ -119,80 +127,91 @@ export class ChatView extends ItemView implements ChatInterface {
     // Don't set JSON-RPC client here - we'll set it when needed
   }
 
-  async initSession(agentId: string): Promise<void> {
-    this.currentAgentId = agentId;
-    await this.ensureSession();
-  }
-
   private async ensureSession(): Promise<string> {
-    if (!this.sessionManager || !this.acpClient) {
-      throw new Error('Session manager or ACP client not initialized');
+    if (this.ensureSessionPromise) {
+      return this.ensureSessionPromise;
     }
 
-    // Ensure we have a JSON-RPC client from a connected agent
-    const jsonRpcClient = this.getConnectedJsonRpcClient();
-    if (!jsonRpcClient) {
-      throw new Error('No connected agents available');
-    }
+    this.ensureSessionPromise = (async () => {
+      try {
+        console.log('Ensure session');
+        if (!this.sessionManager || !this.acpClient) {
+          throw new Error('Session manager or ACP client not initialized');
+        }
 
-    // Set the JSON-RPC client on the session manager
-    this.sessionManager.setJsonRpcClient(jsonRpcClient);
+        // Ensure we have a JSON-RPC client from a connected agent
 
-    if (!this.currentSessionId) {
-      // Use the vault path as the working directory
-      // @ts-ignore
-      const vaultPath = this.app.vault.adapter.basePath || process.cwd();
+        if (!this.currentSessionId) {
+          // Use the vault path as the working directory
+          // @ts-ignore
+          const vaultPath = this.app.vault.adapter.basePath || process.cwd();
 
-      const connectedAgentIds = this.acpClient.getConnectedAgents();
-      const agentId = this.currentAgentId || connectedAgentIds[0];
+          const connectedAgentIds = this.acpClient.getConnectedAgents();
+          const defaultAgentId = (this.app as any).plugins?.plugins?.[
+            'acp-chat-assistant'
+          ]?.settings?.defaultAgentId;
+          const agentId =
+            this.currentAgentId ||
+            (defaultAgentId && connectedAgentIds.includes(defaultAgentId)
+              ? defaultAgentId
+              : connectedAgentIds[0]);
 
-      const session = await this.sessionManager.createSession(
-        agentId,
-        vaultPath
-      );
-      this.currentAgentId = agentId;
-      this.currentSessionId = session.sessionId;
+          const jsonRpcClient = this.getConnectedJsonRpcClient(agentId);
+          if (!jsonRpcClient) {
+            throw new Error(`No connected agents available for ${agentId}`);
+          }
 
-      // Update agent name in UI
-      this.updateAgentNameDisplay();
+          const session = await this.sessionManager.createSession(
+            agentId,
+            jsonRpcClient,
+            vaultPath
+          );
+          this.currentAgentId = agentId;
+          this.currentSessionId = session.sessionId;
 
-      // Store modes from session result
-      const sessionInfo = this.sessionManager.getSessionInfo(
-        this.currentSessionId
-      );
-      if (sessionInfo && sessionInfo.modes) {
-        this.availableModes = sessionInfo.modes.availableModes;
-        this.currentModeId = sessionInfo.modes.currentModeId;
-        this.updateModeSelector();
+          // Update agent name in UI
+          this.updateAgentNameDisplay();
+
+          // Store modes from session result
+          const sessionInfo = this.sessionManager.getSessionInfo(
+            this.currentSessionId
+          );
+          if (sessionInfo && sessionInfo.modes) {
+            this.availableModes = sessionInfo.modes.availableModes;
+            this.currentModeId = sessionInfo.modes.currentModeId;
+            this.updateModeSelector();
+          }
+
+          if (sessionInfo && sessionInfo.availableCommands) {
+            this.agentCommands = sessionInfo.availableCommands.map((c) => ({
+              text: c.description,
+              command: `/${c.name}`,
+            }));
+          } else {
+            this.agentCommands = [];
+          }
+        }
+        return this.currentSessionId!;
+      } finally {
+        this.ensureSessionPromise = null;
       }
+    })();
 
-      if (sessionInfo && sessionInfo.availableCommands) {
-        this.agentCommands = sessionInfo.availableCommands.map((c) => ({
-          text: c.description,
-          command: `/${c.name}`,
-        }));
-      } else {
-        this.agentCommands = [];
-      }
-    }
-    return this.currentSessionId;
+    return this.ensureSessionPromise;
   }
 
-  private getConnectedJsonRpcClient(): any {
+  private getConnectedJsonRpcClient(agentId?: string): any {
     if (!this.acpClient) {
       return null;
     }
 
     // Use the selected agent or the first available one
-    let connection;
-    if (this.currentAgentId) {
-      const connections = (this.acpClient as any).connections;
-      connection = connections?.get(this.currentAgentId);
-    }
+    const connections = this.acpClient.getConnections();
+    if (!connections.has(agentId ?? this.currentAgentId ?? 'none')) return null;
 
-    if (!connection) {
-      connection = (this.acpClient as any).getFirstAvailableConnection();
-    }
+    const connection = connections.get(
+      agentId ?? this.currentAgentId ?? 'none'
+    );
 
     return connection?.jsonRpcClient || null;
   }
@@ -314,7 +333,14 @@ export class ChatView extends ItemView implements ChatInterface {
   private setupEventListeners(): void {
     // Send button click
     this.sendButton.addEventListener('click', () => {
-      this.handleSendMessage();
+      if (this.isProcessing) {
+        if (this.currentSessionId && this.sessionManager) {
+          this.cancelPendingPermissions();
+          this.sessionManager.cancelSession(this.currentSessionId);
+        }
+      } else {
+        this.handleSendMessage();
+      }
     });
 
     // Enter key to send (Shift+Enter for new line)
@@ -414,7 +440,10 @@ export class ChatView extends ItemView implements ChatInterface {
       content: [{ type: 'text', text: text }],
     };
 
-    const userMessageForAgent: Message = { ...userMessageForUI, content: [...userMessageForUI.content] };
+    const userMessageForAgent: Message = {
+      ...userMessageForUI,
+      content: [...userMessageForUI.content],
+    };
 
     if (
       this.isDocumentAddedToContext &&
@@ -429,6 +458,7 @@ export class ChatView extends ItemView implements ChatInterface {
 
     // Display user message in UI (this stores the 'clean' version in history)
     this.displayMessage(userMessageForUI);
+    this.isProcessing = true;
     this.updateInputState();
     // Send message via ACP protocol
     try {
@@ -446,12 +476,20 @@ export class ChatView extends ItemView implements ChatInterface {
 
       // Note: We don't display result.message here because the actual content
       // was already streamed via handleStreamingChunk. The result just contains
-      // metadata like stopReason.
+      // metadata like stopReason. If cancelled, nothing extra to show.
     } catch (error) {
       console.error('Failed to send message:', error);
 
       // Finalize any partial streaming message
       this.finalizeStreamingMessage();
+
+      // Suppress error display if the turn was cancelled by the user
+      if (
+        !this.pendingPermissionResolvers.size &&
+        error?.stopReason === 'cancelled'
+      ) {
+        return;
+      }
 
       // Display error message to user
       const errorMessage: Message = {
@@ -464,6 +502,9 @@ export class ChatView extends ItemView implements ChatInterface {
         ],
       };
       this.displayMessage(errorMessage);
+    } finally {
+      this.isProcessing = false;
+      this.updateInputState();
     }
   }
 
@@ -796,6 +837,13 @@ export class ChatView extends ItemView implements ChatInterface {
     params: SessionRequestPermissionParams
   ): Promise<string | null> {
     return new Promise((resolve) => {
+      const toolCallId = params.toolCall.toolCallId;
+      const wrappedResolve = (id: string | null) => {
+        this.pendingPermissionResolvers.delete(toolCallId);
+        resolve(id);
+      };
+      this.pendingPermissionResolvers.set(toolCallId, wrappedResolve);
+
       // Finalize any active streaming part so the permission request block
       // is inserted in the correct chronological position within the flow.
       this.finalizeStreamingMessage();
@@ -874,7 +922,7 @@ export class ChatView extends ItemView implements ChatInterface {
             }
           }
 
-          resolve(option.optionId);
+          wrappedResolve(option.optionId);
         });
       });
 
@@ -903,7 +951,7 @@ export class ChatView extends ItemView implements ChatInterface {
               selectionIndicator.textContent = `(Cancelled)`;
             }
           }
-          resolve(null);
+          wrappedResolve(null);
         });
       }
 
@@ -937,7 +985,7 @@ export class ChatView extends ItemView implements ChatInterface {
       this.currentSessionId = null;
     }
 
-    // Proactively create session if connected
+    // // Proactively create session if connected
     if (status.connected && !this.currentSessionId && this.acpClient) {
       this.ensureSession().catch((err) =>
         console.error('Failed to proactively create session:', err)
@@ -951,8 +999,10 @@ export class ChatView extends ItemView implements ChatInterface {
     const isDisconnected = !this.connectionStatus.connected;
     const isInputEmpty = !this.inputField.value.trim();
 
-    this.inputField.disabled = isDisconnected;
-    this.sendButton.disabled = isDisconnected || isInputEmpty;
+    this.inputField.disabled = isDisconnected || this.isProcessing;
+    this.sendButton.disabled =
+      isDisconnected || (!this.isProcessing && isInputEmpty);
+    setIcon(this.sendButton, this.isProcessing ? 'square' : 'arrow-right');
 
     if (isDisconnected) {
       this.inputField.placeholder = 'Connect to an AI assistant';
@@ -1222,6 +1272,7 @@ export class ChatView extends ItemView implements ChatInterface {
     this.currentAgentId = agentId;
     this.currentSessionId = null;
     this.agentCommands = [];
+    this.ensureSessionPromise = null;
     this.messagesContainer.empty();
     this.updateAgentNameDisplay();
     await this.ensureSession();
@@ -1294,9 +1345,46 @@ export class ChatView extends ItemView implements ChatInterface {
     this.messagesContainer.empty();
   }
 
+  private cancelPendingPermissions(): void {
+    for (const [toolCallId, resolver] of this.pendingPermissionResolvers) {
+      // Remove the pending permission UI element
+      const permissionEl = this.messagesContainer.querySelector(
+        `.acp-permission-request-compact:not([id])`
+      );
+      permissionEl?.remove();
+
+      // Mark the tool call as cancelled
+      const toolCallEl = this.messagesContainer.querySelector(
+        `#tool-call-${toolCallId}`
+      );
+      if (toolCallEl) {
+        const iconSpan = toolCallEl.querySelector(
+          '.acp-permission-icon'
+        ) as HTMLElement;
+        if (iconSpan) {
+          iconSpan.empty();
+          setIcon(iconSpan, 'x-circle');
+        }
+        const content = toolCallEl.querySelector(
+          '.acp-permission-content-compact'
+        );
+        if (content) {
+          const indicator = content.createSpan({
+            cls: 'acp-permission-selection-compact',
+          });
+          indicator.textContent = '(Cancelled)';
+        }
+      }
+
+      resolver(null);
+    }
+  }
+
   private getSessionMessages(): Message[] {
     if (!this.currentSessionId || !this.sessionManager) return [];
-    return this.sessionManager.getSessionInfo(this.currentSessionId)?.messages ?? [];
+    return (
+      this.sessionManager.getSessionInfo(this.currentSessionId)?.messages ?? []
+    );
   }
 
   focusInput(): void {

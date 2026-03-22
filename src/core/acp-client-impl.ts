@@ -29,6 +29,7 @@ import {
   InitializeParams,
   InitializeResult,
 } from '../types/acp';
+import { logger } from './logging-system';
 
 export interface ACPClientOptions {
   healthCheckInterval?: number;
@@ -112,6 +113,9 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
     }
   }
 
+  getConnections(): Map<string, AgentConnection> {
+    return this.connections;
+  }
   /**
    * Initialize file operations handler
    */
@@ -167,7 +171,6 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
    * Start an agent with full configuration
    */
   async startAgentWithConfig(config: AgentConfig): Promise<void> {
-    console.log(config.id);
     if (this.connections.has(config.id)) {
       throw new Error(`Agent ${config.id} is already connected`);
     }

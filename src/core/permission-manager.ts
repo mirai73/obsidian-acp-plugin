@@ -125,7 +125,6 @@ export class PermissionManagerImpl implements PermissionManager {
    * Log an operation for audit purposes
    */
   logOperation(operation: string, resource: string, granted: boolean): void {
-    console.log({ operation, resource, granted });
     if (!this.config.logOperations) {
       return;
     }

@@ -3,6 +3,8 @@
  * Provides debug logging, operation audit logs, and configurable log levels
  */
 
+import { editorEditorField } from 'obsidian';
+
 /**
  * Log levels for filtering and categorization (Requirement 7.4)
  */
@@ -195,8 +197,8 @@ export class Logger {
 
     // Add to log storage
     this.addLogEntry(entry);
-
     // Output to console if enabled
+
     if (this.config.enableConsoleOutput) {
       this.outputToConsole(entry);
     }
@@ -583,7 +585,6 @@ export class Logger {
 
   private outputToConsole(entry: LogEntry): void {
     const formatted = this.formatter.format(entry);
-
     switch (entry.level) {
       case LogLevel.TRACE:
       case LogLevel.DEBUG:

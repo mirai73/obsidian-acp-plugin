@@ -1,5 +1,5 @@
 import { Plugin, WorkspaceLeaf, Notice } from 'obsidian';
-
+import { logger, LogLevel } from './src/core/logging-system';
 import { PluginSettings, DEFAULT_SETTINGS } from './src/types/plugin';
 import {
   ConnectionStatus,
@@ -27,6 +27,16 @@ export default class ACPChatPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
+    if (
+      process.env.OBSIDIAN_ACP_DEBUG === 'true' ||
+      process.env.OBSIDIAN_ACP_DEBUG === '1'
+    ) {
+      logger.configure({
+        level: LogLevel.DEBUG,
+        enableConsoleOutput: true,
+      });
+      console.log('ACP Plugin: Debug logging enabled via environment variable');
+    }
     // Initialize Obsidian-integrated file operations handler
     this.fileOperationsHandler = new ObsidianFileOperationsHandler({
       app: this.app,
@@ -65,10 +75,14 @@ export default class ACPChatPlugin extends Plugin {
 
     // Set up ACP client event listeners to update chat view connection status
     this.acpClient.on('agent-connected', (agentId: string) => {
+      new Notice(`Connected ${agentId}`, 5000);
+
       this.updateChatConnectionStatus();
     });
 
     this.acpClient.on('agent-disconnected', (agentId: string) => {
+      new Notice(`Disconnected from ${agentId}`, 5000);
+
       this.updateChatConnectionStatus();
     });
 
@@ -213,6 +227,7 @@ export default class ACPChatPlugin extends Plugin {
     // Automatically connect to all enabled agents
     this.app.workspace.onLayoutReady(async () => {
       await this.connectAllAgents();
+      this.updateChatConnectionStatus();
     });
   }
 
@@ -322,27 +337,12 @@ export default class ACPChatPlugin extends Plugin {
       return;
     }
 
-    let connected = 0;
-    let failed = 0;
-
     for (const agent of enabledAgents) {
       try {
-        await this.acpClient?.startAgentWithConfig(agent);
-        connected++;
+        this.acpClient?.startAgentWithConfig(agent);
       } catch (error) {
         console.error(`Failed to connect agent ${agent.name}:`, error);
-        failed++;
       }
-    }
-
-    if (connected > 0) {
-      new Notice(`Connected ${connected} agent${connected > 1 ? 's' : ''}`);
-    }
-    if (failed > 0) {
-      new Notice(
-        `Failed to connect ${failed} agent${failed > 1 ? 's' : ''}`,
-        5000
-      );
     }
   }
 
