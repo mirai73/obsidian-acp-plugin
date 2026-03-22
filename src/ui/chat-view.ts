@@ -31,7 +31,6 @@ export class ChatView extends ItemView implements ChatInterface {
   private sendButton: HTMLButtonElement;
   private statusIndicator: HTMLElement;
   private connectionStatus: ConnectionStatus = { connected: false };
-  private messageHistory: Message[] = [];
   private acpClient: ACPClientImpl | null = null;
   private sessionManager: SessionManagerImpl | null = null;
   private currentSessionId: string | null = null;
@@ -415,12 +414,12 @@ export class ChatView extends ItemView implements ChatInterface {
       content: [{ type: 'text', text: text }],
     };
 
-    const userMessageForAgent: Message = { ...userMessageForUI };
+    const userMessageForAgent: Message = { ...userMessageForUI, content: [...userMessageForUI.content] };
 
     if (
       this.isDocumentAddedToContext &&
       this.activeFile &&
-      this.messageHistory.length === 0
+      this.getSessionMessages().length === 0
     ) {
       userMessageForAgent.content.unshift({
         type: 'text',
@@ -704,9 +703,6 @@ export class ChatView extends ItemView implements ChatInterface {
       }
     }
 
-    // Store in history
-    this.messageHistory.push(message);
-
     // Scroll to bottom
     this.scrollToBottom();
   }
@@ -964,7 +960,7 @@ export class ChatView extends ItemView implements ChatInterface {
       this.inputField.placeholder = 'Type your message here...';
     }
 
-    const hasMessages = this.messageHistory && this.messageHistory.length > 0;
+    const hasMessages = this.getSessionMessages().length > 0;
 
     if (this.agentSelector) {
       this.agentSelector.disabled = isDisconnected;
@@ -1225,7 +1221,6 @@ export class ChatView extends ItemView implements ChatInterface {
   private async initializeNewConversation(agentId: string): Promise<void> {
     this.currentAgentId = agentId;
     this.currentSessionId = null;
-    this.messageHistory = [];
     this.agentCommands = [];
     this.messagesContainer.empty();
     this.updateAgentNameDisplay();
@@ -1262,7 +1257,6 @@ export class ChatView extends ItemView implements ChatInterface {
     this.currentSessionId = sessionId;
     this.currentAgentId = session.agentId;
     this.updateAgentNameDisplay();
-    this.messageHistory = []; // Reset locally and rebuild from session
     this.messagesContainer.empty();
 
     // Re-render all messages from session
@@ -1298,11 +1292,11 @@ export class ChatView extends ItemView implements ChatInterface {
   // Public methods for external control
   clearMessages(): void {
     this.messagesContainer.empty();
-    this.messageHistory = [];
   }
 
-  getMessageHistory(): Message[] {
-    return [...this.messageHistory];
+  private getSessionMessages(): Message[] {
+    if (!this.currentSessionId || !this.sessionManager) return [];
+    return this.sessionManager.getSessionInfo(this.currentSessionId)?.messages ?? [];
   }
 
   focusInput(): void {
