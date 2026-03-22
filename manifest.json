@@ -1,7 +1,7 @@
 {
 	"id": "acp-chat-assistant",
 	"name": "ACP Chat Assistant",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"minAppVersion": "0.15.0",
 	"description": "Agent Client Protocol (ACP) integration, enabling AI coding assistants to interact with your vault through a standardized JSON-RPC 2.0 interface.",
 	"author": "Massimiliano Angelino",
