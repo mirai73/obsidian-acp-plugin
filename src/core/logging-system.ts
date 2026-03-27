@@ -179,9 +179,9 @@ export class Logger {
     operation?: string
   ): void {
     // Check if logging is enabled for this level and category
-    if (level < this.config.level || !this.config.categories.has(category)) {
-      return;
-    }
+    // if (level < this.config.level || !this.config.categories.has(category)) {
+    //   return;
+    // }
 
     const entry: LogEntry = {
       timestamp: new Date(),

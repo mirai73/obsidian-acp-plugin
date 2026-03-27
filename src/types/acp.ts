@@ -102,17 +102,25 @@ export interface SessionSetModeParams {
 	modeId: string;
 }
 
+export interface SessionSetModelParams {
+	sessionId: string;
+	modelId: string;
+}
+
 export interface Message {
 	role: 'user' | 'assistant' | 'system';
 	content: ContentBlock[];
 }
 
 export interface ContentBlock {
-	type: 'text' | 'image' | 'resource' | 'diff';
+	type: 'text' | 'image' | 'resource' | 'diff' | 'resource_link' | 'resource';
 	text?: string;
 	source?: string;
 	data?: string;
 	mimeType?: string;
+	name?: string;
+	size?: number;
+	uri?: string;
 	resource?: {
 		uri: string;
 		mimeType?: string;
@@ -241,4 +249,10 @@ export interface ConnectionStatus {
 	error?: string;
 	status?: 'connected' | 'disconnected' | 'connecting' | 'error';
 	lastConnected?: Date;
+}
+
+export interface AcpCommand {
+	name: string;
+	description: string;
+	input?: any;
 }

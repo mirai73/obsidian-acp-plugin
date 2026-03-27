@@ -322,7 +322,8 @@ body {
   opacity: 1;
 }
 
-.acp-mode-selector {
+.acp-mode-selector,
+.acp-model-selector {
   background: transparent;
   border: none;
   color: var(--acp-text-muted);
@@ -340,21 +341,25 @@ body {
   letter-spacing: 0.05em;
 }
 
-.acp-mode-selector:hover:not(:disabled) {
+.acp-mode-selector:hover:not(:disabled),
+.acp-model-selector:hover:not(:disabled) {
   color: var(--acp-primary-color);
 }
 
-.acp-mode-selector:hover:not(:disabled) {
+.acp-mode-selector:hover:not(:disabled),
+.acp-model-selector:hover:not(:disabled) {
   border-color: var(--acp-primary-color);
   background: var(--background-modifier-hover);
 }
 
-.acp-mode-selector:focus {
+.acp-mode-selector:focus,
+.acp-model-selector:focus {
   border-color: var(--acp-primary-color);
   box-shadow: 0 0 0 2px var(--acp-input-focus-glow);
 }
 
-.acp-mode-selector option {
+.acp-mode-selector option,
+.acp-model-selector option {
   background: var(--background-primary);
   color: var(--acp-text-normal);
 }
@@ -362,6 +367,7 @@ body {
 /* New Selectors Row */
 .acp-selectors-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 4px 8px;
   margin-bottom: 2px;
@@ -383,7 +389,8 @@ body {
 }
 
 .acp-agent-selector,
-.acp-mode-selector {
+.acp-mode-selector,
+.acp-model-selector {
   background: var(--background-modifier-form-field);
   border: 1px solid var(--acp-glass-border);
   border-radius: 4px;
@@ -393,10 +400,15 @@ body {
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
+  max-width: 130px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .acp-agent-selector:hover:not(:disabled),
-.acp-mode-selector:hover:not(:disabled) {
+.acp-mode-selector:hover:not(:disabled),
+.acp-model-selector:hover:not(:disabled) {
   color: var(--acp-text-normal);
   border-color: var(--acp-primary-color);
   background: var(--background-modifier-hover);
@@ -407,13 +419,16 @@ body {
   display: none;
   /* Shown via JS */
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   background: rgba(var(--color-accent-rgb), 0.05);
-  border: 1px dashed lightgray;
-  border-radius: 6px;
-  padding: 4px 10px;
+  border: none;
+  background-color: rgb(240, 240, 240);
+  border-radius: 4px;
+  padding: 2px 6px;
   margin: 2px 0 6px 0;
   gap: 8px;
+  width: max-content;
+  max-width: 100%;
 }
 
 .acp-document-info {
@@ -422,7 +437,7 @@ body {
 }
 
 .acp-document-name {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 400;
   font-family: var(--acp-font-monospace);
   color: var(--acp-text-normal);
@@ -432,8 +447,8 @@ body {
 }
 
 .acp-document-add-btn {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   display: flex;
   align-items: center;
   justify-content: center;

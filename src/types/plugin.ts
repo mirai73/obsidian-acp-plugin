@@ -75,3 +75,11 @@ export const DEFAULT_SETTINGS: Partial<PluginSettings> = {
     connectionTimeout: 10,
   },
 };
+
+export const ExtensionToMime: Record<string, string> = {
+  md: 'text/markdown',
+  txt: 'text/plain',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  pdf: 'application/pdf',
+};

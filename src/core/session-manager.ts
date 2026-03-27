@@ -15,6 +15,7 @@ import {
   ContentBlock,
   SessionModeState,
   SessionSetModeParams,
+  SessionSetModelParams,
   ToolCall,
   ToolCallUpdate,
   AvailableCommand,
@@ -40,6 +41,7 @@ export interface SessionContext {
   status: 'active' | 'cancelled' | 'completed';
   pendingOperations: Set<string>;
   modes?: SessionModeState;
+  models?: SessionNewResult['models'];
   toolCalls?: Map<string, ToolCall>;
   availableCommands?: AvailableCommand[];
 }
@@ -120,6 +122,7 @@ export class SessionManagerImpl implements SessionManager {
         status: 'active',
         pendingOperations: new Set(),
         modes: result.modes,
+        models: result.models,
         toolCalls: new Map(),
       };
 
@@ -520,6 +523,39 @@ export class SessionManagerImpl implements SessionManager {
       throw new JsonRpcError(
         JsonRpcErrorCode.INTERNAL_ERROR,
         `Failed to set mode: ${error.message || 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Set the current model for a session
+   */
+  async setModel(sessionId: string, modelId: string): Promise<void> {
+    const session = this.getSession(sessionId);
+
+    if (!session.jsonRpcClient) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        'No JSON-RPC client configured for session'
+      );
+    }
+
+    try {
+      const params: SessionSetModelParams = {
+        sessionId,
+        modelId,
+      };
+      await session.jsonRpcClient.sendRequest('session/set_model', params);
+
+      if (session.models) {
+        session.models.currentModelId = modelId;
+      }
+
+      session.lastActivity = new Date();
+    } catch (error) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        `Failed to set model: ${error.message || 'Unknown error'}`
       );
     }
   }
