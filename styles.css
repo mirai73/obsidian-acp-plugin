@@ -164,6 +164,7 @@ body {
   --acp-input-focus-glow: rgba(var(--color-accent-rgb), 0.4);
   --acp-glass-bg: rgba(var(--background-primary-rgb), 0.4);
   --acp-glass-border: rgba(255, 255, 255, 0.08);
+  --acp-document-box-bg: rgba(20, 20, 20, 0.7);
 }
 
 .theme-light {
@@ -175,6 +176,7 @@ body {
   --acp-input-focus-glow: rgba(var(--color-accent-rgb), 0.3);
   --acp-glass-bg: rgba(255, 255, 255, 0.6);
   --acp-glass-border: rgba(0, 0, 0, 0.05);
+   --acp-document-box-bg: rgba(240, 240,240, 0.8);
 }
 
 .acp-chat-container {
@@ -381,9 +383,8 @@ body {
 }
 
 .acp-selector-label {
-  font-size: 10px;
-  color: var(--acp-text-faint);
-  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--acp-text-normal);
   letter-spacing: 0.05em;
   font-weight: 600;
 }
@@ -400,7 +401,7 @@ body {
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
-  max-width: 130px;
+  max-width: 80px;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
@@ -422,7 +423,7 @@ body {
   justify-content: flex-start;
   background: rgba(var(--color-accent-rgb), 0.05);
   border: none;
-  background-color: rgb(240, 240, 240);
+  background-color: var(--acp-document-box-bg);
   border-radius: 4px;
   padding: 2px 6px;
   margin: 2px 0 6px 0;

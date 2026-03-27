@@ -320,7 +320,7 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Auto/Mode selector
 		const modalityContainer = selectorsRow.createDiv('acp-selector-wrapper');
-		modalityContainer.createSpan({ text: 'Mode:', cls: 'acp-selector-label' });
+		// modalityContainer.createSpan({ text: 'Mode:', cls: 'acp-selector-label' });
 		this.modeSelector = modalityContainer.createEl('select', {
 			cls: 'acp-mode-selector',
 		});
@@ -330,7 +330,7 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Model selector
 		const modelContainer = selectorsRow.createDiv('acp-selector-wrapper');
-		modelContainer.createSpan({ text: 'Model:', cls: 'acp-selector-label' });
+		// modelContainer.createSpan({ text: 'Model:', cls: 'acp-selector-label' });
 		this.modelSelector = modelContainer.createEl('select', {
 			cls: 'acp-model-selector',
 		});
