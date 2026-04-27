@@ -415,6 +415,16 @@ body {
   background: var(--background-modifier-hover);
 }
 
+/* Context row: holds document box + selection badge side by side */
+.acp-context-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 4px 0;
+}
+
 /* Document Context Box */
 .acp-document-box {
   display: none;
@@ -426,7 +436,6 @@ body {
   background-color: var(--acp-document-box-bg);
   border-radius: 4px;
   padding: 2px 6px;
-  margin: 2px 0 6px 0;
   gap: 8px;
   width: max-content;
   max-width: 100%;
@@ -882,6 +891,47 @@ body {
 
 .acp-queue-indicator:hover {
   opacity: 1;
+}
+
+/* Selected text context badge */
+.acp-selection-badge {
+  display: none; /* toggled to flex via JS */
+  align-items: center;
+  gap: 6px;
+  background: rgba(var(--color-accent-rgb), 0.12);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.3);
+  border-radius: 10px;
+  padding: 1px 4px 1px 8px;
+  line-height: 1.6;
+  transition: opacity var(--acp-animation-duration) var(--acp-animation-easing);
+}
+
+.acp-selection-badge-label {
+  font-size: var(--font-ui-smaller);
+  font-family: var(--acp-font-monospace);
+  color: var(--acp-primary-color);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.acp-selection-badge-dismiss {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none !important;
+  background: transparent !important;
+  color: var(--acp-text-faint);
+  cursor: pointer;
+  border-radius: 50% !important;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.acp-selection-badge-dismiss:hover {
+  color: var(--acp-error-color);
 }
 
 .acp-input-row {

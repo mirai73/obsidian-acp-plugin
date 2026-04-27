@@ -70,6 +70,10 @@ export class ChatView extends ItemView implements ChatInterface {
 	private messageQueue: QueuedMessage[] = [];
 	private queueIndicator: HTMLElement | null = null;
 
+	// Selected text context
+	private selectedTextBadge: HTMLElement | null = null;
+	private selectedTextContext: { text: string; from: number; to: number } | null = null;
+
 	private get commands() {
 		return [...this.defaultCommands, ...this.agentCommands];
 	}
@@ -107,6 +111,13 @@ export class ChatView extends ItemView implements ChatInterface {
 		);
 		this.activeFile = this.app.workspace.getActiveFile();
 		this.updateDocumentContextBox();
+
+		// Track editor selection for selected-text context badge
+		this.registerEvent(
+			this.app.workspace.on('editor-selection-change' as any, (editor: any) => {
+				this.handleEditorSelectionChange(editor);
+			})
+		);
 
 		// Proactively try to ensure session if already connected
 		if (this.connectionStatus.connected) {
@@ -295,9 +306,16 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Clean input container
 		this.inputContainer = chatWrapper.createDiv('acp-input-container');
 
-		// Document Context Box above chat input
-		this.documentContextBox = this.inputContainer.createDiv('acp-document-box');
+		// Context row: document box + selection badge sit side-by-side
+		const contextRow = this.inputContainer.createDiv('acp-context-row');
+
+		// Document Context Box
+		this.documentContextBox = contextRow.createDiv('acp-document-box');
 		this.updateDocumentContextBox();
+
+		// Selected text context badge
+		this.selectedTextBadge = contextRow.createDiv('acp-selection-badge');
+		this.selectedTextBadge.style.display = 'none';
 
 		// Input row with text area and enhanced send button
 		const inputRow = this.inputContainer.createDiv('acp-input-row');
@@ -445,6 +463,11 @@ export class ChatView extends ItemView implements ChatInterface {
 			return;
 		}
 
+		// Capture and clear selected text context before clearing input
+		const selectionContext = this.selectedTextContext;
+		this.selectedTextContext = null;
+		this.updateSelectionBadge();
+
 		// Clear input
 		this.inputField.value = '';
 		this.autoResizeTextarea();
@@ -471,6 +494,14 @@ export class ChatView extends ItemView implements ChatInterface {
 				mimeType: ExtensionToMime[this.sessionDocumentFile.extension] ?? 'text/plain',
 				size: this.sessionDocumentFile.stat.size,
 				text: `Current document: ${this.sessionDocumentFile.path}\n\n${text}`,
+			});
+		}
+
+		// Prepend selected text as a text context block
+		if (selectionContext) {
+			userMessageForAgent.content.unshift({
+				type: 'text',
+				text: `Selected text (characters ${selectionContext.from}-${selectionContext.to}):\n\`\`\`\n${selectionContext.text}\n\`\`\``,
 			});
 		}
 
@@ -1127,6 +1158,77 @@ export class ChatView extends ItemView implements ChatInterface {
 				}
 			}
 			this.updateDocumentContextBox();
+		});
+	}
+
+	private handleEditorSelectionChange(editor: any): void {
+		if (!editor) {
+			this.selectedTextContext = null;
+			this.updateSelectionBadge();
+			return;
+		}
+
+		const selection = editor.getSelection?.();
+		if (!selection) {
+			this.selectedTextContext = null;
+			this.updateSelectionBadge();
+			return;
+		}
+
+		const from = editor.getCursor?.('from');
+		const to = editor.getCursor?.('to');
+
+		if (!from || !to || (from.line === to.line && from.ch === to.ch)) {
+			// No real selection
+			this.selectedTextContext = null;
+			this.updateSelectionBadge();
+			return;
+		}
+
+		// Use character offsets: convert line/ch to absolute character position
+		const docContent: string = editor.getValue?.() ?? '';
+		const lines: string[] = docContent.split('\n');
+
+		let fromOffset = 0;
+		for (let i = 0; i < from.line; i++) {
+			fromOffset += lines[i].length + 1; // +1 for newline
+		}
+		fromOffset += from.ch;
+
+		let toOffset = 0;
+		for (let i = 0; i < to.line; i++) {
+			toOffset += lines[i].length + 1;
+		}
+		toOffset += to.ch;
+
+		this.selectedTextContext = { text: selection, from: fromOffset, to: toOffset };
+		this.updateSelectionBadge();
+	}
+
+	private updateSelectionBadge(): void {
+		if (!this.selectedTextBadge) return;
+
+		if (!this.selectedTextContext) {
+			this.selectedTextBadge.style.display = 'none';
+			return;
+		}
+
+		const { from, to } = this.selectedTextContext;
+		this.selectedTextBadge.empty();
+		this.selectedTextBadge.style.display = 'flex';
+
+		const label = this.selectedTextBadge.createSpan({
+			cls: 'acp-selection-badge-label',
+			text: `L ${from}-${to}`,
+		});
+
+		const dismissBtn = this.selectedTextBadge.createEl('button', {
+			cls: 'acp-selection-badge-dismiss',
+		});
+		setIcon(dismissBtn, 'x');
+		dismissBtn.addEventListener('click', () => {
+			this.selectedTextContext = null;
+			this.updateSelectionBadge();
 		});
 	}
 
