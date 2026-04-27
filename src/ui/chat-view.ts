@@ -886,6 +886,25 @@ export class ChatView extends ItemView implements ChatInterface {
 			cls: 'acp-permission-summary',
 		});
 
+		// Chevron toggle
+		const chevron = contentEl.createSpan({ cls: 'acp-tool-call-chevron' });
+		setIcon(chevron, 'chevron-right');
+
+		// Collapsible body for raw input / output
+		const body = messageEl.createDiv('acp-tool-call-body');
+
+		let expanded = false;
+		const toggle = () => {
+			expanded = !expanded;
+			body.classList.toggle('is-expanded', expanded);
+			chevron.classList.toggle('is-expanded', expanded);
+		};
+		chevron.addEventListener('click', toggle);
+		titleEl.addEventListener('click', toggle);
+
+		// Populate if data already present
+		this.renderToolCallBody(body, chunk.rawInput, chunk.rawOutput);
+
 		this.scrollToBottom();
 	}
 
@@ -935,6 +954,44 @@ export class ChatView extends ItemView implements ChatInterface {
 					setIcon(iconSpan, 'x-circle');
 					break;
 			}
+		}
+
+		// Re-render body whenever rawInput / rawOutput arrive
+		if (chunk.rawInput !== undefined || chunk.rawOutput !== undefined) {
+			const body = messageEl.querySelector('.acp-tool-call-body') as HTMLElement;
+			if (body) {
+				this.renderToolCallBody(body, chunk.rawInput, chunk.rawOutput);
+			}
+		}
+	}
+
+	/**
+	 * Render raw input / output sections inside a tool call body element.
+	 * Safe to call multiple times — clears and re-renders each time.
+	 */
+	private renderToolCallBody(body: HTMLElement, rawInput: any, rawOutput: any): void {
+		body.empty();
+
+		const hasInput = rawInput !== undefined && rawInput !== null;
+		const hasOutput = rawOutput !== undefined && rawOutput !== null;
+
+		if (!hasInput && !hasOutput) return;
+
+		const fmt = (val: any): string => {
+			if (typeof val === 'string') return val;
+			try { return JSON.stringify(val, null, 2); } catch { return String(val); }
+		};
+
+		if (hasInput) {
+			body.createDiv({ cls: 'acp-tool-call-section-label', text: 'Input' });
+			const pre = body.createEl('pre', { cls: 'acp-tool-call-pre' });
+			pre.createEl('code', { text: fmt(rawInput) });
+		}
+
+		if (hasOutput) {
+			body.createDiv({ cls: 'acp-tool-call-section-label', text: 'Output' });
+			const pre = body.createEl('pre', { cls: 'acp-tool-call-pre' });
+			pre.createEl('code', { text: fmt(rawOutput) });
 		}
 	}
 

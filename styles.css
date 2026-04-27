@@ -695,6 +695,77 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Tool call chevron + collapsible body ── */
+.acp-tool-call-chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--acp-text-faint);
+  cursor: pointer;
+  transition: transform 0.2s ease, color 0.15s ease;
+  margin-left: auto;
+  padding: 0 2px;
+}
+
+.acp-tool-call-chevron:hover {
+  color: var(--acp-primary-color);
+}
+
+.acp-tool-call-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+
+.acp-tool-call-body {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) transparent;
+  border-top: 1px solid rgba(var(--color-accent-rgb), 0.15);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.acp-tool-call-body.is-expanded {
+  display: flex;
+}
+
+.acp-tool-call-section-label {
+  font-size: var(--font-ui-smaller);
+  font-family: var(--acp-font-interface);
+  font-weight: 600;
+  color: var(--acp-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 2px;
+}
+
+.acp-tool-call-pre {
+  margin: 0 0 6px 0;
+  padding: 6px 8px;
+  background: var(--code-background);
+  border-radius: var(--acp-radius-small);
+  border: 1px solid var(--acp-border-color);
+  font-family: var(--acp-font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--acp-text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.acp-tool-call-pre code {
+  background: none;
+  padding: 0;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
 .acp-permission-button {
   padding: 6px 12px;
   border-radius: var(--acp-radius-medium);
