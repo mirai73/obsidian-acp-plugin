@@ -28,6 +28,11 @@ import { ExtensionToMime } from 'src/types/plugin';
 
 export const CHAT_VIEW_TYPE = 'acp-chat-view';
 
+interface QueuedMessage {
+	text: string;
+	agentMessage: Message;
+}
+
 export class ChatView extends ItemView implements ChatInterface {
 	private messagesContainer: HTMLElement;
 	private inputContainer: HTMLElement;
@@ -61,6 +66,8 @@ export class ChatView extends ItemView implements ChatInterface {
 	private readonly defaultCommands = [];
 	private agentCommands: AcpCommand[] = [];
 	private ensureSessionPromise: Promise<string> | null = null;
+	private messageQueue: QueuedMessage[] = [];
+	private queueIndicator: HTMLElement | null = null;
 
 	private get commands() {
 		return [...this.defaultCommands, ...this.agentCommands];
@@ -356,7 +363,8 @@ export class ChatView extends ItemView implements ChatInterface {
 	private setupEventListeners(): void {
 		// Send button click
 		this.sendButton.addEventListener('click', () => {
-			if (this.isProcessing) {
+			if (this.isProcessing && this.messageQueue.length === 0) {
+				// Cancel mode: only cancel when processing with empty queue (Req 2.1)
 				if (this.currentSessionId && this.sessionManager) {
 					this.cancelPendingPermissions();
 					this.sessionManager.cancelSession(this.currentSessionId);
@@ -465,55 +473,74 @@ export class ChatView extends ItemView implements ChatInterface {
 			});
 		}
 
-		// Display user message in UI (this stores the 'clean' version in history)
+		if (this.isProcessing || this.messageQueue.length > 0) {
+			// Enqueue the message for later dispatch
+			this.messageQueue.push({ text, agentMessage: userMessageForAgent });
+			this.displayMessage(userMessageForUI);
+			this.updateQueueIndicator();
+			return;
+		}
+
+		// Idle path: display and dispatch immediately
 		this.displayMessage(userMessageForUI);
+		await this.ensureSession();
+		this.dispatchTurn(text, userMessageForAgent);
+	}
+
+	private async dispatchTurn(text: string, agentMessage: Message): Promise<void> {
+		const turnSessionId = this.currentSessionId!;
 		this.isProcessing = true;
 		this.updateInputState();
-		// Send message via ACP protocol
 		try {
-			if (!this.sessionManager) {
-				throw new Error('Session manager not initialized');
+			await this.sessionManager!.sendPrompt(turnSessionId, [agentMessage]);
+			if (turnSessionId === this.currentSessionId) {
+				this.finalizeStreamingMessage();
 			}
-
-			const sessionId = await this.ensureSession();
-
-			const result = await this.sessionManager.sendPrompt(sessionId, [
-				userMessageForAgent,
-			]);
-			// Finalize any streaming message that was being displayed
-			this.finalizeStreamingMessage();
-
-			// Note: We don't display result.message here because the actual content
-			// was already streamed via handleStreamingChunk. The result just contains
-			// metadata like stopReason. If cancelled, nothing extra to show.
 		} catch (error) {
-			console.error('Failed to send message:', error);
-
-			// Finalize any partial streaming message
-			this.finalizeStreamingMessage();
-
-			// Suppress error display if the turn was cancelled by the user
-			if (
-				!this.pendingPermissionResolvers.size &&
-				error?.stopReason === 'cancelled'
-			) {
-				return;
+			if (turnSessionId === this.currentSessionId) {
+				// Suppress error display if the turn was cancelled by the user
+				if (
+					!this.pendingPermissionResolvers.size &&
+					error?.stopReason === 'cancelled'
+				) {
+					return;
+				}
+				const errorMessage: Message = {
+					role: 'assistant',
+					content: [
+						{
+							type: 'text',
+							text: `Error: Failed to send message. ${error.message || 'Unknown error'}`,
+						},
+					],
+				};
+				this.displayMessage(errorMessage);
 			}
-
-			// Display error message to user
-			const errorMessage: Message = {
-				role: 'assistant',
-				content: [
-					{
-						type: 'text',
-						text: `Error: Failed to send message. ${error.message || 'Unknown error'}`,
-					},
-				],
-			};
-			this.displayMessage(errorMessage);
 		} finally {
 			this.isProcessing = false;
 			this.updateInputState();
+			this.dequeueAndDispatch();
+		}
+	}
+
+	private dequeueAndDispatch(): void {
+		if (this.messageQueue.length > 0 && this.currentSessionId) {
+			const next = this.messageQueue.shift()!;
+			this.updateQueueIndicator();
+			this.dispatchTurn(next.text, next.agentMessage);
+		}
+	}
+
+	private updateQueueIndicator(): void {
+		if (!this.queueIndicator) {
+			this.queueIndicator = this.inputContainer.createDiv('acp-queue-indicator');
+		}
+
+		if (this.messageQueue.length > 0) {
+			this.queueIndicator.textContent = `${this.messageQueue.length} pending`;
+			this.queueIndicator.style.display = 'block';
+		} else {
+			this.queueIndicator.style.display = 'none';
 		}
 	}
 
@@ -603,6 +630,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	 */
 	private handleStreamingChunk(sessionId: string, chunk: any): void {
 		if (!chunk) return;
+		if (sessionId !== this.currentSessionId) return;
 
 		if (chunk.type === 'available_commands_update') {
 			this.agentCommands = (chunk.commands || []).map((c: any) => ({
@@ -1009,10 +1037,16 @@ export class ChatView extends ItemView implements ChatInterface {
 		const isDisconnected = !this.connectionStatus.connected;
 		const isInputEmpty = !this.inputField.value.trim();
 
-		this.inputField.disabled = isDisconnected || this.isProcessing;
+		// Input field stays enabled whenever connected (Req 1.2)
+		this.inputField.disabled = isDisconnected;
+
+		// Send button disabled only when disconnected or (not processing and input empty) (Req 2.3)
 		this.sendButton.disabled =
 			isDisconnected || (!this.isProcessing && isInputEmpty);
-		setIcon(this.sendButton, this.isProcessing ? 'square' : 'arrow-right');
+
+		// Show cancel icon only when processing with empty queue (Req 2.1, 2.2)
+		const isCancelMode = this.isProcessing && this.messageQueue.length === 0;
+		setIcon(this.sendButton, isCancelMode ? 'square' : 'arrow-right');
 
 		if (isDisconnected) {
 			this.inputField.placeholder = 'Connect to an AI assistant';
@@ -1319,9 +1353,18 @@ export class ChatView extends ItemView implements ChatInterface {
 
 	private async initializeNewConversation(agentId: string): Promise<void> {
 		this.currentAgentId = agentId;
-		this.currentSessionId = null;
-		this.agentCommands = [];
+		// Reset session state so a fresh session is created
 		this.ensureSessionPromise = null;
+		this.currentSessionId = null;
+		// Discard queued messages from the old session (Req 1.7)
+		this.messageQueue = [];
+		this.updateQueueIndicator();
+		// Remove any in-progress streaming element before clearing the container (Req 3.4)
+		const streamingEl = this.messagesContainer?.querySelector('.streaming-message');
+		if (streamingEl) {
+			streamingEl.remove();
+		}
+		this.agentCommands = [];
 		this.messagesContainer.empty();
 		this.updateAgentNameDisplay();
 		await this.ensureSession();

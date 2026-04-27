@@ -179,7 +179,7 @@ export class SessionManagerImpl implements SessionManager {
       const result = await session.jsonRpcClient.sendRequest(
         'session/prompt',
         params,
-        this.options.defaultTimeout
+        0 // No timeout — wait indefinitely for user approval
       );
       // Add agent response to session context
       if (result && result.message) {
@@ -330,7 +330,10 @@ export class SessionManagerImpl implements SessionManager {
         lastMsg.content.push(update.content);
       }
 
-      // Forward the chunk to the UI callback if available
+      // Forward the chunk to the UI callback if available.
+      // sessionId is always passed as the first argument so ChatView can
+      // compare it against its active session and discard stale chunks.
+      // Requirements 3.5, 3.7 — no structural change needed here.
       if (this.options.onStreamingChunk) {
         this.options.onStreamingChunk(sessionId, update.content);
       }

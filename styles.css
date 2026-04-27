@@ -863,6 +863,27 @@ body {
   box-shadow: 0 0 0 2px var(--acp-input-focus-glow);
 }
 
+/* Queue indicator badge — shown inside the input container when messages are pending */
+.acp-queue-indicator {
+  display: none; /* toggled to block via JS */
+  align-self: flex-start;
+  font-size: var(--font-ui-smaller);
+  font-family: var(--acp-font-interface);
+  color: var(--acp-text-on-accent);
+  background: var(--acp-primary-color);
+  border-radius: 10px;
+  padding: 1px 8px;
+  line-height: 1.6;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+  transition: opacity var(--acp-animation-duration) var(--acp-animation-easing);
+}
+
+.acp-queue-indicator:hover {
+  opacity: 1;
+}
+
 .acp-input-row {
   display: flex;
   gap: 8px;
