@@ -755,6 +755,7 @@ body {
   word-break: break-word;
   line-height: 1.5;
   overflow-x: auto;
+  min-height: calc(1.5em * 3 + 12px); /* at least 3 lines */
 }
 
 .acp-tool-call-pre code {
@@ -1075,6 +1076,7 @@ body {
   word-break: break-word;
   line-height: 1.5;
   border: none;
+  min-height: calc(1.5em * 3 + 16px); /* at least 3 lines */
 }
 
 .acp-selection-context-pre code {
