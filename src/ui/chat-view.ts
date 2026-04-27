@@ -59,6 +59,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	private currentAgentId: string | null = null;
 	private documentContextBox: HTMLElement | null = null;
 	private activeFile: TFile | null = null;
+	private sessionDocumentFile: TFile | null = null; // The file attached to the current session
 	private isDocumentAddedToContext: boolean = false;
 	private commandDropdown: HTMLElement | null = null;
 	private selectedCommandIndex: number = -1;
@@ -460,16 +461,16 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		if (
 			this.isDocumentAddedToContext &&
-			this.activeFile &&
+			this.sessionDocumentFile &&
 			this.getSessionMessages().length === 0
 		) {
 			userMessageForAgent.content.unshift({
 				type: 'resource_link',
-				uri: `file//${this.activeFile.path}`,
-				name: this.activeFile.name,
-				mimeType: ExtensionToMime[this.activeFile.extension] ?? 'text/plain',
-				size: this.activeFile.stat.size,
-				text: `Current document: ${this.activeFile.path}\n\n${text}`,
+				uri: `file//${this.sessionDocumentFile.path}`,
+				name: this.sessionDocumentFile.name,
+				mimeType: ExtensionToMime[this.sessionDocumentFile.extension] ?? 'text/plain',
+				size: this.sessionDocumentFile.stat.size,
+				text: `Current document: ${this.sessionDocumentFile.path}\n\n${text}`,
 			});
 		}
 
@@ -478,11 +479,13 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.messageQueue.push({ text, agentMessage: userMessageForAgent });
 			this.displayMessage(userMessageForUI);
 			this.updateQueueIndicator();
+			this.updateDocumentContextBox();
 			return;
 		}
 
 		// Idle path: display and dispatch immediately
 		this.displayMessage(userMessageForUI);
+		this.updateDocumentContextBox();
 		await this.ensureSession();
 		this.dispatchTurn(text, userMessageForAgent);
 	}
@@ -1069,7 +1072,16 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		this.documentContextBox.empty();
 
-		if (!this.activeFile) {
+		const conversationIsEmpty = this.getSessionMessages().length === 0 &&
+			this.messagesContainer.childElementCount === 0;
+		// When a document is attached to the session, show that file.
+		// Otherwise show the currently active file (only for empty conversations).
+		const displayFile = this.isDocumentAddedToContext
+			? this.sessionDocumentFile
+			: this.activeFile;
+		const shouldShow = displayFile && (conversationIsEmpty || this.isDocumentAddedToContext);
+
+		if (!shouldShow) {
 			this.documentContextBox.style.display = 'none';
 			return;
 		}
@@ -1077,7 +1089,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.documentContextBox.style.display = 'flex';
 
 		const info = this.documentContextBox.createDiv('acp-document-info');
-		info.createSpan({ text: this.activeFile.name, cls: 'acp-document-name' });
+		info.createSpan({ text: displayFile.name, cls: 'acp-document-name' });
 
 		const btn = this.documentContextBox.createEl('button', {
 			cls: `acp-document-add-btn ${this.isDocumentAddedToContext ? 'is-added' : ''}`,
@@ -1086,6 +1098,34 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		btn.addEventListener('click', () => {
 			this.isDocumentAddedToContext = !this.isDocumentAddedToContext;
+			// When attaching, snapshot the currently active file as the session document
+			if (this.isDocumentAddedToContext) {
+				this.sessionDocumentFile = this.activeFile;
+			} else {
+				this.sessionDocumentFile = null;
+			}
+			// Persist per-session document attachment state
+			if (this.sessionManager) {
+				const sessionId = this.currentSessionId;
+				if (sessionId) {
+					const session = this.sessionManager.getSessionInfo(sessionId);
+					if (session) {
+						session.isDocumentAddedToContext = this.isDocumentAddedToContext;
+						session.attachedDocumentPath = this.sessionDocumentFile?.path;
+					}
+				} else {
+					// Session not yet created — persist after it's created
+					const snapshotFile = this.sessionDocumentFile;
+					const snapshotAdded = this.isDocumentAddedToContext;
+					this.ensureSession().then((newSessionId) => {
+						const session = this.sessionManager?.getSessionInfo(newSessionId);
+						if (session) {
+							session.isDocumentAddedToContext = snapshotAdded;
+							session.attachedDocumentPath = snapshotFile?.path;
+						}
+					}).catch(() => {/* ignore */});
+				}
+			}
 			this.updateDocumentContextBox();
 		});
 	}
@@ -1367,6 +1407,10 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.agentCommands = [];
 		this.messagesContainer.empty();
 		this.updateAgentNameDisplay();
+		// Reset document attachment state for the new session
+		this.isDocumentAddedToContext = false;
+		this.sessionDocumentFile = null;
+		this.updateDocumentContextBox();
 		await this.ensureSession();
 		this.scrollToBottom();
 		this.updateInputState();
@@ -1424,6 +1468,19 @@ export class ChatView extends ItemView implements ChatInterface {
 		} else {
 			this.agentCommands = [];
 		}
+
+		// Restore per-session document attachment state
+		this.isDocumentAddedToContext = session.isDocumentAddedToContext ?? false;
+		this.sessionDocumentFile = session.attachedDocumentPath
+			? (this.app.vault.getAbstractFileByPath(session.attachedDocumentPath) as TFile | null)
+			: null;
+
+		// If this session has an attached document, make it the active file in the editor
+		if (this.sessionDocumentFile) {
+			this.app.workspace.openLinkText(this.sessionDocumentFile.path, '', false);
+		}
+
+		this.updateDocumentContextBox();
 
 		this.scrollToBottom();
 		new Notice('Switched to conversation');

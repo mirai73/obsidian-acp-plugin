@@ -44,6 +44,8 @@ export interface SessionContext {
   models?: SessionNewResult['models'];
   toolCalls?: Map<string, ToolCall>;
   availableCommands?: AvailableCommand[];
+  isDocumentAddedToContext?: boolean;
+  attachedDocumentPath?: string; // Path of the document attached to this session
 }
 
 /**
