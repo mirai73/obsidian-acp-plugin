@@ -31,6 +31,7 @@ export const CHAT_VIEW_TYPE = 'acp-chat-view';
 interface QueuedMessage {
 	text: string;
 	agentMessage: Message;
+	selectionContext?: { text: string; from: number; to: number } | null;
 }
 
 export class ChatView extends ItemView implements ChatInterface {
@@ -507,7 +508,8 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		if (this.isProcessing || this.messageQueue.length > 0) {
 			// Enqueue the message for later dispatch
-			this.messageQueue.push({ text, agentMessage: userMessageForAgent });
+			this.messageQueue.push({ text, agentMessage: userMessageForAgent, selectionContext });
+			if (selectionContext) this.displaySelectionContext(selectionContext);
 			this.displayMessage(userMessageForUI);
 			this.updateQueueIndicator();
 			this.updateDocumentContextBox();
@@ -515,6 +517,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		// Idle path: display and dispatch immediately
+		if (selectionContext) this.displaySelectionContext(selectionContext);
 		this.displayMessage(userMessageForUI);
 		this.updateDocumentContextBox();
 		await this.ensureSession();
@@ -748,6 +751,39 @@ export class ChatView extends ItemView implements ChatInterface {
 				this.renderMarkdownContent(finalContent, messageContent);
 			}
 		}
+	}
+
+	/**
+	 * Render a collapsible selected-text context widget above the user message bubble.
+	 */
+	private displaySelectionContext(ctx: { text: string; from: number; to: number }): void {
+		const wrapper = this.messagesContainer.createDiv('acp-selection-context');
+
+		// Header row — always visible
+		const header = wrapper.createDiv('acp-selection-context-header');
+
+		const label = header.createSpan({
+			cls: 'acp-selection-context-label',
+			text: `L ${ctx.from}-${ctx.to}`,
+		});
+
+		const chevron = header.createSpan({ cls: 'acp-selection-context-chevron' });
+		setIcon(chevron, 'chevron-right');
+
+		// Body — hidden by default
+		const body = wrapper.createDiv('acp-selection-context-body');
+		const pre = body.createEl('pre', { cls: 'acp-selection-context-pre' });
+		pre.createEl('code', { text: ctx.text });
+
+		// Toggle expand/collapse
+		let expanded = false;
+		header.addEventListener('click', () => {
+			expanded = !expanded;
+			body.classList.toggle('is-expanded', expanded);
+			chevron.classList.toggle('is-expanded', expanded);
+		});
+
+		this.scrollToBottom();
 	}
 
 	/**

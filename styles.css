@@ -934,6 +934,87 @@ body {
   color: var(--acp-error-color);
 }
 
+/* ── Selection context widget (shown in chat above the user bubble) ── */
+.acp-selection-context {
+  align-self: flex-end;
+  max-width: 85%;
+  margin-left: 15%;
+  margin-bottom: 2px;
+  border-radius: var(--acp-radius-medium);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.25);
+  background: rgba(var(--color-accent-rgb), 0.06);
+  overflow: hidden;
+}
+
+.acp-selection-context-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.acp-selection-context-header:hover {
+  background: rgba(var(--color-accent-rgb), 0.1);
+}
+
+.acp-selection-context-label {
+  font-size: var(--font-ui-smaller);
+  font-family: var(--acp-font-monospace);
+  color: var(--acp-primary-color);
+  font-weight: 500;
+  flex: 1;
+}
+
+.acp-selection-context-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--acp-text-faint);
+  transition: transform 0.2s ease;
+}
+
+.acp-selection-context-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+
+/* Body: collapsed by default, expands on toggle */
+.acp-selection-context-body {
+  display: none;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) transparent;
+  border-top: 1px solid rgba(var(--color-accent-rgb), 0.15);
+}
+
+.acp-selection-context-body.is-expanded {
+  display: block;
+}
+
+.acp-selection-context-pre {
+  margin: 0;
+  padding: 8px 10px;
+  background: transparent;
+  font-family: var(--acp-font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--acp-text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  border: none;
+}
+
+.acp-selection-context-pre code {
+  background: none;
+  padding: 0;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
 .acp-input-row {
   display: flex;
   gap: 8px;
