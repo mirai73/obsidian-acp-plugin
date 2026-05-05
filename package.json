@@ -1,6 +1,6 @@
 {
 	"name": "acp-chat-plugin",
-	"version": "1.0.8",
+	"version": "1.0.9",
 	"description": "Agent Client Protocol (ACP) integration for Obsidian, enabling AI coding assistants to interact with your vault through a standardized JSON-RPC 2.0 interface.",
 	"main": "main.js",
 	"scripts": {
