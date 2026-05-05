@@ -3,7 +3,7 @@
  * Manages ACP session lifecycle, conversation context, and session operations
  */
 
-import { SessionManager } from '../interfaces/session-manager';
+import { SessionManager, SessionSummary } from '../interfaces/session-manager';
 import {
   Message,
   PromptResult,
@@ -22,12 +22,14 @@ import {
 } from '../types/acp';
 import { JsonRpcClient } from './json-rpc-client';
 import { JsonRpcError, JsonRpcErrorCode } from './acp-method-handlers';
+import { SessionPersistenceService } from './session-persistence';
 
 export interface SessionManagerOptions {
   defaultTimeout?: number;
   maxSessions?: number;
   sessionTimeout?: number;
   onStreamingChunk?: (sessionId: string, chunk: any) => void;
+  persistenceService?: SessionPersistenceService;
 }
 
 export interface SessionContext {
@@ -46,6 +48,8 @@ export interface SessionContext {
   availableCommands?: AvailableCommand[];
   isDocumentAddedToContext?: boolean;
   attachedDocumentPath?: string; // Path of the document attached to this session
+  /** Stable persisted record ID — set after the first successful disk save. */
+  persistedId?: string;
 }
 
 /**
@@ -197,6 +201,9 @@ export class SessionManagerImpl implements SessionManager {
       // Remove operation from pending
       session.pendingOperations.delete(operationId);
 
+      // Persist session after turn completes
+      await this.persistSession(session);
+
       return result as PromptResult;
     } catch (error) {
       // Remove operation from pending
@@ -239,6 +246,9 @@ export class SessionManagerImpl implements SessionManager {
 
     // Clear pending operations
     session.pendingOperations.clear();
+
+    // Persist final state before removing from memory
+    await this.persistSession(session);
 
     // Remove session after a short delay to allow for cleanup
     const timeout = setTimeout(() => {
@@ -462,6 +472,181 @@ export class SessionManagerImpl implements SessionManager {
   }
 
   /**
+   * Return a unified list of all known sessions — live (in-memory) and
+   * persisted (on disk) — deduplicated and sorted newest-first.
+   */
+  getSessions(): SessionSummary[] {
+    const results = new Map<string, SessionSummary>();
+
+    // 1. Live in-memory sessions
+    for (const session of this.sessions.values()) {
+      const summary = this.sessionToSummary(session, true);
+      // Key by persistedId when available so disk records don't duplicate
+      const key = session.persistedId ?? session.sessionId;
+      results.set(key, summary);
+    }
+
+    // 2. Persisted sessions not already represented by a live session
+    const persistence = this.options.persistenceService;
+    if (persistence) {
+      for (const record of persistence.getAllSessions()) {
+        if (!results.has(record.id)) {
+          results.set(record.id, {
+            sessionId: record.id,
+            agentId: record.agentId,
+            createdAt: new Date(record.createdAt),
+            lastActivity: new Date(record.lastActivity),
+            messageCount: record.messages.length,
+            preview: this.previewFromPersistedMessages(record.messages),
+            isLive: false,
+            isPersisted: true,
+            attachedDocumentPath: record.attachedDocumentPath,
+          });
+        }
+      }
+    }
+
+    return Array.from(results.values()).sort(
+      (a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()
+    );
+  }
+
+  /**
+   * Load a session by ID.
+   *
+   * - If the session is already live in memory, returns its sessionId.
+   * - If the session exists only on disk:
+   *   - If the agent advertises `loadSession` capability → calls `session/load`
+   *     with the original agent session ID so the agent restores its own context
+   *     and replays history via `session/update` notifications.
+   *   - Otherwise → calls `session/new` and hydrates the in-memory message
+   *     history client-side (agent has no prior context).
+   */
+  async loadSession(
+    id: string,
+    jsonRpcClient?: JsonRpcClient,
+    cwd?: string,
+    agentCapabilities?: { loadSession?: boolean }
+  ): Promise<string> {
+    // Already live?
+    if (this.sessions.has(id)) {
+      return id;
+    }
+
+    // Check if a live session has this as its persistedId
+    for (const session of this.sessions.values()) {
+      if (session.persistedId === id) {
+        return session.sessionId;
+      }
+    }
+
+    // Load from disk
+    const persistence = this.options.persistenceService;
+    if (!persistence) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        'Session not found and persistence is not configured'
+      );
+    }
+
+    const record = persistence.getSession(id);
+    if (!record) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.SESSION_NOT_FOUND,
+        `Persisted session not found: ${id}`
+      );
+    }
+
+    if (!jsonRpcClient) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        'A JSON-RPC client is required to restore a persisted session'
+      );
+    }
+
+    const resolvedCwd = cwd || process.cwd();
+
+    // --- Path A: agent supports session/load ---
+    if (agentCapabilities?.loadSession && record.agentSessionId) {
+      const loadParams = {
+        sessionId: record.agentSessionId,
+        cwd: resolvedCwd,
+        mcpServers: [],
+      };
+
+      // session/load causes the agent to replay history via session/update
+      // notifications before responding. Those notifications are routed through
+      // handleStreamingUpdate → onStreamingChunk as normal, but we don't want
+      // them rendered in the UI during restore (the ChatView will re-render from
+      // the in-memory messages array after loadSession returns). We therefore
+      // create the session context first so handleStreamingUpdate can accumulate
+      // chunks into it, then call session/load.
+      const sessionContext: SessionContext = {
+        sessionId: record.agentSessionId,
+        agentId: record.agentId,
+        jsonRpcClient,
+        capabilities: [],
+        messages: record.messages as Message[],
+        createdAt: new Date(record.createdAt),
+        lastActivity: new Date(record.lastActivity),
+        status: 'active',
+        pendingOperations: new Set(),
+        toolCalls: new Map(),
+        attachedDocumentPath: record.attachedDocumentPath,
+        persistedId: record.id,
+      };
+      this.sessions.set(record.agentSessionId, sessionContext);
+
+      try {
+        await jsonRpcClient.sendRequest('session/load', loadParams);
+        // Agent has fully replayed history — session is ready
+        return record.agentSessionId;
+      } catch (err) {
+        // session/load failed — remove the optimistic context and fall through
+        this.sessions.delete(record.agentSessionId);
+        console.warn(
+          'session/load failed, falling back to session/new:',
+          err
+        );
+      }
+    }
+
+    // --- Path B: fallback — session/new + client-side hydration ---
+    const newParams: SessionNewParams = {
+      cwd: resolvedCwd,
+      mcpServers: [],
+    };
+    const result = await jsonRpcClient.sendRequest('session/new', newParams);
+
+    if (!result || !result.sessionId) {
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        'Agent did not return a session ID'
+      );
+    }
+
+    const sessionContext: SessionContext = {
+      sessionId: result.sessionId,
+      agentId: record.agentId,
+      jsonRpcClient,
+      capabilities: [],
+      messages: record.messages as Message[],
+      createdAt: new Date(record.createdAt),
+      lastActivity: new Date(record.lastActivity),
+      status: 'active',
+      pendingOperations: new Set(),
+      modes: result.modes,
+      models: result.models,
+      toolCalls: new Map(),
+      attachedDocumentPath: record.attachedDocumentPath,
+      persistedId: record.id,
+    };
+
+    this.sessions.set(result.sessionId, sessionContext);
+    return result.sessionId;
+  }
+
+  /**
    * Get session statistics
    */
   getStats(): {
@@ -596,9 +781,60 @@ export class SessionManagerImpl implements SessionManager {
   }
 
   /**
+   * Persist a session to disk if the persistence service is configured.
+   * Updates `session.persistedId` with the stable record ID.
+   */
+  private async persistSession(session: SessionContext): Promise<void> {
+    const persistence = this.options.persistenceService;
+    if (!persistence) return;
+    try {
+      const id = await persistence.saveSession(session, session.persistedId ?? undefined);
+      if (id) session.persistedId = id;
+    } catch (err) {
+      console.warn('Failed to persist session:', err);
+    }
+  }
+
+  /**
+   * Build a SessionSummary from a live SessionContext.
+   */
+  private sessionToSummary(session: SessionContext, isLive: boolean): SessionSummary {
+    const persistence = this.options.persistenceService;
+    return {
+      sessionId: session.persistedId ?? session.sessionId,
+      agentId: session.agentId,
+      createdAt: session.createdAt,
+      lastActivity: session.lastActivity,
+      messageCount: session.messages.length,
+      preview: this.previewFromMessages(session.messages),
+      isLive,
+      isPersisted: !!session.persistedId && !!persistence,
+      attachedDocumentPath: session.attachedDocumentPath,
+    };
+  }
+
+  private previewFromMessages(messages: Message[]): string {
+    const first = messages.find((m) => m.role === 'user');
+    if (!first) return 'Empty conversation';
+    const textBlock = first.content.find((b) => b.type === 'text');
+    const text = (textBlock as any)?.text ?? 'Untitled';
+    const clean = text.replace(/^Current document: .*\n\n/, '');
+    return clean.length > 80 ? clean.substring(0, 80) + '…' : clean;
+  }
+
+  private previewFromPersistedMessages(messages: any[]): string {
+    const first = messages.find((m: any) => m.role === 'user');
+    if (!first) return 'Empty conversation';
+    const textBlock = first.content.find((b: any) => b.type === 'text');
+    const text = textBlock?.text ?? 'Untitled';
+    const clean = text.replace(/^Current document: .*\n\n/, '');
+    return clean.length > 80 ? clean.substring(0, 80) + '…' : clean;
+  }
+
+  /**
    * Shutdown the session manager and clean up resources
    */
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     // Clear cleanup interval
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
@@ -616,6 +852,8 @@ export class SessionManagerImpl implements SessionManager {
       try {
         const session = this.sessions.get(sessionId);
         if (session && session.status === 'active') {
+          // Persist before shutdown
+          await this.persistSession(session);
           // Mark as cancelled without using setTimeout
           session.status = 'cancelled';
           session.pendingOperations.clear();

@@ -25,6 +25,7 @@ import { ACPClientImpl } from '../core/acp-client-impl';
 import { SessionManagerImpl, SessionContext } from '../core/session-manager';
 import { ACPClient } from 'src/interfaces/acp-client';
 import { ExtensionToMime } from 'src/types/plugin';
+import { SessionSummary } from '../interfaces/session-manager';
 
 export const CHAT_VIEW_TYPE = 'acp-chat-view';
 
@@ -137,20 +138,19 @@ export class ChatView extends ItemView implements ChatInterface {
 	/**
 	 * Set the ACP client for message sending
 	 */
-	setACPClient(client: ACPClientImpl): void {
+	setACPClient(client: ACPClientImpl, persistenceService?: import('../core/session-persistence').SessionPersistenceService): void {
 		this.acpClient = client;
 
-		// Initialize session manager with streaming callback
+		// Initialize session manager with streaming callback and optional persistence
 		this.sessionManager = new SessionManagerImpl({
 			onStreamingChunk: (sessionId: string, chunk: any) => {
 				this.handleStreamingChunk(sessionId, chunk);
 			},
+			persistenceService,
 		});
 
 		// Connect session manager to ACP client for streaming updates
 		client.setSessionManager(this.sessionManager);
-
-		// Don't set JSON-RPC client here - we'll set it when needed
 	}
 
 	private async ensureSession(): Promise<string> {
@@ -1672,7 +1672,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	private showSessionHistory(): void {
 		if (!this.sessionManager) return;
 
-		const sessions = this.sessionManager.getActiveSessions();
+		const sessions = this.sessionManager.getSessions();
 		if (sessions.length === 0) {
 			new Notice('No past conversations found');
 			return;
@@ -1690,16 +1690,40 @@ export class ChatView extends ItemView implements ChatInterface {
 	private async loadSession(sessionId: string): Promise<void> {
 		if (!this.sessionManager) return;
 
-		const session = this.sessionManager.getSessionInfo(sessionId);
+		// If the session is persisted-only, we need a live JSON-RPC client to restore it
+		const jsonRpcClient = this.getConnectedJsonRpcClient(this.currentAgentId ?? undefined);
+		// @ts-ignore
+		const vaultPath = this.app.vault.adapter.basePath || process.cwd();
+
+		// Pass negotiated agent capabilities so session/load is used when supported
+		const agentCapabilities = this.acpClient
+			?.getConnections()
+			?.get(this.currentAgentId ?? '')
+			?.agentCapabilities;
+
+		let liveSessionId: string;
+		try {
+			liveSessionId = await this.sessionManager.loadSession(
+				sessionId,
+				jsonRpcClient ?? undefined,
+				vaultPath,
+				agentCapabilities
+			);
+		} catch (err) {
+			new Notice(`Failed to load session: ${(err as any).message ?? err}`);
+			return;
+		}
+
+		const session = this.sessionManager.getSessionInfo(liveSessionId);
 		if (!session) return;
 
-		this.currentSessionId = sessionId;
+		this.currentSessionId = liveSessionId;
 		this.currentAgentId = session.agentId;
 		this.updateAgentNameDisplay();
 		this.messagesContainer.empty();
 
 		// Re-render all messages from session
-		session.messages.forEach((msg) => {
+		session.messages.forEach((msg: Message) => {
 			const displayMsg = this.cleanMessageForDisplay(msg);
 			this.displayMessage(displayMsg);
 		});
@@ -1712,7 +1736,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		if (session.availableCommands) {
-			this.agentCommands = session.availableCommands.map((c) => ({
+			this.agentCommands = session.availableCommands.map((c: any) => ({
 				description: c.description,
 				name: `/${c.name}`,
 				input: c.input,
@@ -1727,13 +1751,11 @@ export class ChatView extends ItemView implements ChatInterface {
 			? (this.app.vault.getAbstractFileByPath(session.attachedDocumentPath) as TFile | null)
 			: null;
 
-		// If this session has an attached document, make it the active file in the editor
 		if (this.sessionDocumentFile) {
 			this.app.workspace.openLinkText(this.sessionDocumentFile.path, '', false);
 		}
 
 		this.updateDocumentContextBox();
-
 		this.scrollToBottom();
 		new Notice('Switched to conversation');
 	}
@@ -1815,93 +1837,69 @@ export class ChatView extends ItemView implements ChatInterface {
 }
 
 /**
- * Modal to suggest and switch between active sessions
+ * Modal to suggest and switch between sessions (live + persisted)
  */
-class SessionSuggestModal extends SuggestModal<SessionContext> {
-	private sessions: SessionContext[];
+class SessionSuggestModal extends SuggestModal<SessionSummary> {
+	private sessions: SessionSummary[];
 	private onSelect: (sessionId: string) => void;
 	private acpClient: ACPClientImpl | null;
 
 	constructor(
 		app: App,
-		sessions: SessionContext[],
+		sessions: SessionSummary[],
 		acpClient: ACPClientImpl | null,
 		onSelect: (sessionId: string) => void
 	) {
 		super(app);
-		this.sessions = sessions
-			.filter((s) => s.messages.length > 0)
-			.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+		this.sessions = sessions.filter((s) => s.messageCount > 0);
 		this.acpClient = acpClient;
 		this.onSelect = onSelect;
+		this.setPlaceholder('Search past conversations…');
 	}
 
-	getSuggestions(query: string): SessionContext[] {
-		return this.sessions.filter((session) => {
-			const firstMsg = this.getSessionPreview(session);
-			return (
-				session.sessionId.toLowerCase().includes(query.toLowerCase()) ||
-				firstMsg.toLowerCase().includes(query.toLowerCase())
-			);
-		});
+	getSuggestions(query: string): SessionSummary[] {
+		const q = query.toLowerCase();
+		return this.sessions.filter(
+			(s) =>
+				s.sessionId.toLowerCase().includes(q) ||
+				s.preview.toLowerCase().includes(q) ||
+				s.agentId.toLowerCase().includes(q)
+		);
 	}
 
-	renderSuggestion(session: SessionContext, el: HTMLElement) {
-		const preview = this.getSessionPreview(session);
+	renderSuggestion(session: SessionSummary, el: HTMLElement) {
 		const container = el.createDiv('acp-session-suggestion');
 
-		// Row 1: Session Preview
-		container.createDiv({ text: preview, cls: 'acp-session-title' });
+		// Row 1: preview text
+		container.createDiv({ text: session.preview, cls: 'acp-session-title' });
 
 		const meta = container.createDiv('acp-session-meta');
 
-		// Agent Name (from ACP Client if available)
+		// Agent name
 		let agentName = session.agentId;
 		if (this.acpClient) {
-			const status = this.acpClient
-				.getAllConnectionStatuses()
-				.get(session.agentId);
-			if (status?.agentName) {
-				agentName = status.agentName;
-			}
+			const status = this.acpClient.getAllConnectionStatuses().get(session.agentId);
+			if (status?.agentName) agentName = status.agentName;
 		}
-
-		meta.createSpan({
-			text: `Agent: ${agentName}`,
-			cls: 'acp-session-agent',
-		});
-
+		meta.createSpan({ text: `Agent: ${agentName}`, cls: 'acp-session-agent' });
 		meta.createSpan({
 			text: ` | ${session.lastActivity.toLocaleString()}`,
 			cls: 'acp-session-time',
 		});
-
 		meta.createSpan({
-			text: ` | ID: ${session.sessionId.substring(0, 8)}...`,
+			text: ` | ${session.messageCount} messages`,
 			cls: 'acp-session-id',
+		});
+
+		// Live / persisted badge
+		const badge = meta.createSpan({
+			cls: `acp-session-badge ${session.isLive ? 'acp-session-badge-live' : 'acp-session-badge-persisted'}`,
+			text: session.isLive ? '● live' : '○ history',
 		});
 	}
 
-	onChooseSuggestion(session: SessionContext, evt: MouseEvent | KeyboardEvent) {
+	onChooseSuggestion(session: SessionSummary, evt: MouseEvent | KeyboardEvent) {
 		this.onSelect(session.sessionId);
-	}
-
-	private getSessionPreview(session: SessionContext): string {
-		const firstUserMsg = session.messages.find((m) => m.role === 'user');
-		if (
-			!firstUserMsg ||
-			!firstUserMsg.content ||
-			firstUserMsg.content.length === 0
-		)
-			return 'Empty Conversation';
-
-		let text =
-			firstUserMsg.content.find((c) => c.type === 'text')?.text ||
-			'Untitled Session';
-		// Clean preview text
-		text = text.replace(/^Current document: .*\n\n/, '');
-
-		return text.substring(0, 60) + (text.length > 60 ? '...' : '');
 	}
 }
 

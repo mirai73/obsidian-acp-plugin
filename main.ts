@@ -16,16 +16,28 @@ import {
   ConnectionStatusModal,
   ChangeHistoryModal,
 } from './src/ui/settings-tab';
+import { SessionPersistenceService } from './src/core/session-persistence';
 
 export default class ACPChatPlugin extends Plugin {
   settings: PluginSettings;
   acpClient: ACPClientImpl;
+  sessionPersistence: SessionPersistenceService;
   private chatView: ChatView | null = null;
   private statusBarItem: HTMLElement | null = null;
   fileOperationsHandler: ObsidianFileOperationsHandler;
 
   async onload() {
     await this.loadSettings();
+
+    // Initialise session persistence service
+    this.sessionPersistence = new SessionPersistenceService(this);
+
+    // Run auto-cleanup of old sessions on startup
+    this.sessionPersistence.runAutoCleanup().then((removed) => {
+      if (removed > 0) {
+        console.log(`ACP: cleaned up ${removed} expired session(s)`);
+      }
+    });
 
     if (
       process.env.OBSIDIAN_ACP_DEBUG === 'true' ||
@@ -112,7 +124,7 @@ export default class ACPChatPlugin extends Plugin {
       this.registerView(CHAT_VIEW_TYPE, (leaf) => {
         this.chatView = new ChatView(leaf);
         // Connect the chat view to the ACP client
-        this.chatView.setACPClient(this.acpClient);
+        this.chatView.setACPClient(this.acpClient, this.sessionPersistence);
         return this.chatView;
       });
     } catch (e) {
@@ -232,7 +244,7 @@ export default class ACPChatPlugin extends Plugin {
   }
 
   onunload() {
-    // Cleanup ACP client
+    // Cleanup ACP client (shutdown is async but we fire-and-forget on unload)
     if (this.acpClient) {
       this.acpClient.shutdown();
     }
@@ -261,7 +273,7 @@ export default class ACPChatPlugin extends Plugin {
       this.chatView = leaf.view as ChatView;
       // Ensure the chat view has the ACP client
       if (this.chatView && this.acpClient) {
-        this.chatView.setACPClient(this.acpClient);
+        this.chatView.setACPClient(this.acpClient, this.sessionPersistence);
         this.chatView.refreshConnection();
       }
       // Update connection status when view is opened

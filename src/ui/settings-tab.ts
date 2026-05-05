@@ -43,6 +43,12 @@ export class ACPChatSettingTab extends PluginSettingTab {
     );
     // UI Configuration Section
     this.displayUIConfiguration(uiGroup);
+
+    const sessionGroup = new SettingGroup(containerEl).setHeading(
+      'Session History'
+    );
+    // Session Persistence Section
+    this.displaySessionConfiguration(sessionGroup);
   }
 
   private displayAgentConfiguration(containerEl: HTMLElement): void {
@@ -468,6 +474,119 @@ export class ACPChatSettingTab extends PluginSettingTab {
               }
               this.plugin.settings.ui.showFileOperationNotifications = value;
               await this.plugin.saveSettings();
+            })
+        )
+    );
+  }
+
+  private displaySessionConfiguration(group: SettingGroup): void {
+    const cfg = this.plugin.settings.sessions;
+    const count = this.plugin.settings.persistedSessions?.length ?? 0;
+
+    // Master toggle
+    group.addSetting((setting) =>
+      setting
+        .setName('Save session history')
+        .setDesc('Persist chat conversations to disk so they can be recalled after restarting Obsidian')
+        .addToggle((toggle) =>
+          toggle
+            .setValue(cfg?.enabled ?? true)
+            .onChange(async (value) => {
+              if (!this.plugin.settings.sessions) {
+                this.plugin.settings.sessions = {
+                  enabled: true,
+                  autoCleanup: true,
+                  cleanupAfterDays: 30,
+                };
+              }
+              this.plugin.settings.sessions.enabled = value;
+              await this.plugin.saveSettings();
+            })
+        )
+    );
+
+    // Auto-cleanup toggle
+    group.addSetting((setting) =>
+      setting
+        .setName('Auto-delete old sessions')
+        .setDesc('Automatically remove sessions older than the configured number of days')
+        .addToggle((toggle) =>
+          toggle
+            .setValue(cfg?.autoCleanup ?? true)
+            .onChange(async (value) => {
+              if (!this.plugin.settings.sessions) {
+                this.plugin.settings.sessions = {
+                  enabled: true,
+                  autoCleanup: true,
+                  cleanupAfterDays: 30,
+                };
+              }
+              this.plugin.settings.sessions.autoCleanup = value;
+              await this.plugin.saveSettings();
+            })
+        )
+    );
+
+    // Days slider
+    group.addSetting((setting) =>
+      setting
+        .setName('Delete sessions older than')
+        .setDesc('Sessions with no activity beyond this threshold are removed on startup')
+        .addSlider((slider) =>
+          slider
+            .setLimits(1, 365, 1)
+            .setValue(cfg?.cleanupAfterDays ?? 30)
+            .setDynamicTooltip()
+            .onChange(async (value) => {
+              if (!this.plugin.settings.sessions) {
+                this.plugin.settings.sessions = {
+                  enabled: true,
+                  autoCleanup: true,
+                  cleanupAfterDays: 30,
+                };
+              }
+              this.plugin.settings.sessions.cleanupAfterDays = value;
+              await this.plugin.saveSettings();
+            })
+        )
+        .addText((text) => {
+          text.inputEl.style.width = '40px';
+          text.inputEl.style.textAlign = 'right';
+          text.setValue(String(cfg?.cleanupAfterDays ?? 30));
+          text.inputEl.readOnly = true;
+          // Keep the text in sync with the slider
+          const slider = (setting as any).components?.[0];
+          if (slider?.sliderEl) {
+            slider.sliderEl.addEventListener('input', () => {
+              text.setValue(slider.getValue());
+            });
+          }
+          text.inputEl.after(
+            Object.assign(document.createElement('span'), { textContent: ' days' })
+          );
+        })
+    );
+
+    // Delete all sessions button
+    group.addSetting((setting) =>
+      setting
+        .setName(`Stored sessions: ${count}`)
+        .setDesc('Permanently delete all saved conversation history')
+        .addButton((button) =>
+          button
+            .setButtonText('Delete all sessions')
+            .setClass('mod-warning')
+            .onClick(async () => {
+              if (
+                confirm(
+                  `Delete all ${count} saved session${count !== 1 ? 's' : ''}? This cannot be undone.`
+                )
+              ) {
+                this.plugin.settings.persistedSessions = [];
+                await this.plugin.saveSettings();
+                new Notice('All session history deleted');
+                this.display();
+              }
             })
         )
     );
