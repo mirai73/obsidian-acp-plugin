@@ -750,6 +750,32 @@ export class ChatView extends ItemView implements ChatInterface {
 				messageContent.addClass('acp-markdown-content');
 				this.renderMarkdownContent(finalContent, messageContent);
 			}
+
+			// Add copy button for assistant messages
+			const copyBtn = streamingContainer.createEl('button', {
+				cls: 'acp-message-copy-btn',
+				attr: { 'aria-label': 'Copy message' },
+			});
+			setIcon(copyBtn, 'copy');
+			
+			copyBtn.addEventListener('click', async () => {
+				// Extract text content from the message
+				const textContent = messageContent?.textContent || '';
+				
+				try {
+					await navigator.clipboard.writeText(textContent);
+					// Visual feedback
+					setIcon(copyBtn, 'check');
+					copyBtn.addClass('acp-message-copy-btn-success');
+					setTimeout(() => {
+						setIcon(copyBtn, 'copy');
+						copyBtn.removeClass('acp-message-copy-btn-success');
+					}, 2000);
+				} catch (err) {
+					console.error('Failed to copy message:', err);
+					new Notice('Failed to copy message');
+				}
+			});
 		}
 	}
 
@@ -850,6 +876,37 @@ export class ChatView extends ItemView implements ChatInterface {
 				});
 				codeEl.addClass('language-diff');
 			}
+		}
+
+		// Add copy button for user and assistant messages
+		if (message.role === 'user' || message.role === 'assistant') {
+			const copyBtn = messageEl.createEl('button', {
+				cls: 'acp-message-copy-btn',
+				attr: { 'aria-label': 'Copy message' },
+			});
+			setIcon(copyBtn, 'copy');
+			
+			copyBtn.addEventListener('click', async () => {
+				// Extract text content from all blocks
+				const textContent = message.content
+					.filter(block => block.type === 'text' && block.text)
+					.map(block => block.text)
+					.join('\n\n');
+				
+				try {
+					await navigator.clipboard.writeText(textContent);
+					// Visual feedback
+					setIcon(copyBtn, 'check');
+					copyBtn.addClass('acp-message-copy-btn-success');
+					setTimeout(() => {
+						setIcon(copyBtn, 'copy');
+						copyBtn.removeClass('acp-message-copy-btn-success');
+					}, 2000);
+				} catch (err) {
+					console.error('Failed to copy message:', err);
+					new Notice('Failed to copy message');
+				}
+			});
 		}
 
 		// Scroll to bottom
