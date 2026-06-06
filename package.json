@@ -30,6 +30,7 @@
 		"esbuild": "0.17.3",
 		"fast-check": "^3.23.2",
 		"jest": "^29.7.0",
+		"jest-environment-jsdom": "^30.4.1",
 		"obsidian": "latest",
 		"prettier": "^3.8.1",
 		"ts-jest": "^29.4.6",

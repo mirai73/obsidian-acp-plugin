@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 import { WorkspaceLeaf, ItemView } from 'obsidian';
 
 // Mock Obsidian modules BEFORE importing ChatView
@@ -61,22 +62,38 @@ describe('ChatView', () => {
     // Mock internal properties
     (chatView as any).acpClient = mockClient;
     (chatView as any).sessionManager = mockSessionManager;
+    (chatView as any).currentAgentId = 'agent-1';
 
     // Setup container for ChatView
     const contentEl = document.createElement('div');
-    // Add createDiv to mock contentEl
-    contentEl.createDiv = jest.fn().mockImplementation((cls) => {
-      const div = document.createElement('div');
-      if (cls) div.className = cls;
-      return div;
-    });
-    contentEl.createEl = jest.fn().mockImplementation((tag, options) => {
-      const el = document.createElement(tag);
-      if (options?.cls) el.className = options.cls;
+
+    function mockElement(el: any) {
+      el.createDiv = jest.fn().mockImplementation((cls) => {
+        const div = document.createElement('div');
+        if (cls) div.className = cls;
+        mockElement(div);
+        return div;
+      });
+      el.createEl = jest.fn().mockImplementation((tag, options) => {
+        const subEl = document.createElement(tag);
+        if (options?.cls) subEl.className = options.cls;
+        mockElement(subEl);
+        return subEl;
+      });
+      el.createSpan = jest.fn().mockImplementation((options) => {
+        const span = document.createElement('span');
+        if (options?.cls) span.className = options.cls;
+        if (options?.text) span.textContent = options.text;
+        mockElement(span);
+        return span;
+      });
+      el.empty = jest.fn();
+      el.addClass = jest.fn();
+      el.removeClass = jest.fn();
       return el;
-    });
-    contentEl.empty = jest.fn();
-    contentEl.addClass = jest.fn();
+    }
+
+    mockElement(contentEl);
 
     (chatView as any).containerEl = {
       children: [null, contentEl],

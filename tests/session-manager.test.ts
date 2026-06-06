@@ -62,8 +62,8 @@ describe('SessionManager', () => {
     });
   });
 
-  afterEach(() => {
-    sessionManager.shutdown();
+  afterEach(async () => {
+    await sessionManager.shutdown();
     jest.clearAllMocks();
   });
 
@@ -179,7 +179,7 @@ describe('SessionManager', () => {
           sessionId,
           prompt: testMessages[0].content,
         },
-        5000 // default timeout
+        0 // No timeout
       );
     });
 
@@ -197,7 +197,7 @@ describe('SessionManager', () => {
       ).rejects.toThrow(JsonRpcError);
 
       // Clean up the session manager to prevent Jest open handles
-      sessionManagerWithoutClient.shutdown();
+      await sessionManagerWithoutClient.shutdown();
     });
 
     it('should add messages to session context', async () => {
@@ -266,10 +266,10 @@ describe('SessionManager', () => {
       sessionManager.sendPrompt(sessionId, testMessages).catch(() => {}); // Ignore the error
 
       // Now cancel the session
-      mockJsonRpcClient.sendRequest.mockResolvedValue({});
+      mockJsonRpcClient.sendNotification.mockImplementation(() => {});
       await sessionManager.cancelSession(sessionId);
 
-      expect(mockJsonRpcClient.sendRequest).toHaveBeenCalledWith(
+      expect(mockJsonRpcClient.sendNotification).toHaveBeenCalledWith(
         'session/cancel',
         { sessionId }
       );
@@ -282,9 +282,23 @@ describe('SessionManager', () => {
     });
 
     it('should handle agent communication failure gracefully', async () => {
-      mockJsonRpcClient.sendRequest.mockRejectedValue(
-        new Error('Connection failed')
-      );
+      // Add a pending operation to trigger agent notification
+      const testMessages: Message[] = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'Test' }],
+        },
+      ];
+
+      // Start a prompt (but don't wait for it)
+      mockJsonRpcClient.sendRequest.mockImplementation(
+        () => new Promise(() => {})
+      ); // Never resolves
+      sessionManager.sendPrompt(sessionId, testMessages).catch(() => {}); // Ignore the error
+
+      mockJsonRpcClient.sendNotification.mockImplementation(() => {
+        throw new Error('Connection failed');
+      });
 
       // Should still cancel session even if agent communication fails
       await expect(
@@ -456,7 +470,7 @@ describe('SessionManager', () => {
         mockJsonRpcClient
       );
 
-      sessionManager.shutdown();
+      await sessionManager.shutdown();
 
       // Sessions should be cancelled (though they might still exist briefly)
       const stats = sessionManager.getStats();

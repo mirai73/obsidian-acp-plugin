@@ -235,7 +235,7 @@ export class SessionManagerImpl implements SessionManager {
     if (session.pendingOperations.size > 0 && session.jsonRpcClient) {
       try {
         const params: SessionCancelParams = { sessionId };
-        await session.jsonRpcClient.sendRequest('session/cancel', params);
+        session.jsonRpcClient.sendNotification('session/cancel', params);
       } catch (error) {
         console.warn(
           'Failed to notify agent about session cancellation:',
@@ -247,15 +247,8 @@ export class SessionManagerImpl implements SessionManager {
     // Clear pending operations
     session.pendingOperations.clear();
 
-    // Persist final state before removing from memory
+    // Persist final state
     await this.persistSession(session);
-
-    // Remove session after a short delay to allow for cleanup
-    const timeout = setTimeout(() => {
-      this.sessions.delete(sessionId);
-      this.pendingTimeouts.delete(timeout);
-    }, 1000);
-    this.pendingTimeouts.add(timeout);
   }
 
   /**
@@ -764,10 +757,7 @@ export class SessionManagerImpl implements SessionManager {
     }
 
     if (session.status === 'cancelled') {
-      throw new JsonRpcError(
-        JsonRpcErrorCode.SESSION_NOT_FOUND,
-        `Session cancelled: ${sessionId}`
-      );
+      session.status = 'active';
     }
 
     return session;

@@ -23,8 +23,8 @@ import {
 import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
 import { SessionManagerImpl, SessionContext } from '../core/session-manager';
-import { ACPClient } from 'src/interfaces/acp-client';
-import { ExtensionToMime } from 'src/types/plugin';
+import { ACPClient } from '../interfaces/acp-client';
+import { ExtensionToMime } from '../types/plugin';
 import { SessionSummary } from '../interfaces/session-manager';
 
 export const CHAT_VIEW_TYPE = 'acp-chat-view';
