@@ -14,6 +14,7 @@ export interface PersistedContentBlock {
   uri?: string;
   name?: string;
   size?: number;
+  toolCall?: any;
 }
 
 /**

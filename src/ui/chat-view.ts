@@ -71,6 +71,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	private ensureSessionPromise: Promise<string> | null = null;
 	private messageQueue: QueuedMessage[] = [];
 	private queueIndicator: HTMLElement | null = null;
+	private isRestoringSession = false;
 
 	// Selected text context
 	private selectedTextBadge: HTMLElement | null = null;
@@ -744,8 +745,9 @@ export class ChatView extends ItemView implements ChatInterface {
 			const messageContent = streamingContainer.querySelector(
 				'.message-content'
 			) as HTMLElement;
+			let finalContent = '';
 			if (messageContent && messageContent.textContent) {
-				const finalContent = messageContent.textContent;
+				finalContent = messageContent.textContent;
 				messageContent.innerHTML = '';
 				messageContent.addClass('acp-markdown-content');
 				this.renderMarkdownContent(finalContent, messageContent);
@@ -760,7 +762,7 @@ export class ChatView extends ItemView implements ChatInterface {
 			
 			copyBtn.addEventListener('click', async () => {
 				// Extract text content from the message
-				const textContent = messageContent?.textContent || '';
+				const textContent = finalContent || messageContent?.textContent || '';
 				
 				try {
 					await navigator.clipboard.writeText(textContent);
@@ -816,6 +818,12 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Display a message in the chat
 	 */
 	displayMessage(message: Message): void {
+		const toolCallBlock = message.content.find(b => b.type === 'tool_call');
+		if (message.role === 'system' && toolCallBlock && (toolCallBlock as any).toolCall) {
+			this.displayToolCall((toolCallBlock as any).toolCall);
+			return;
+		}
+
 		const messageEl = this.messagesContainer.createDiv('acp-message');
 		messageEl.addClass(`acp-message-${message.role}`);
 
@@ -887,10 +895,18 @@ export class ChatView extends ItemView implements ChatInterface {
 			setIcon(copyBtn, 'copy');
 			
 			copyBtn.addEventListener('click', async () => {
-				// Extract text content from all blocks
+				// Extract text content from all blocks, preserving markdown formatting for text/diff
 				const textContent = message.content
-					.filter(block => block.type === 'text' && block.text)
-					.map(block => block.text)
+					.map(block => {
+						if (block.type === 'text' && block.text) {
+							return block.text;
+						}
+						if (block.type === 'diff' && block.text) {
+							return `\`\`\`diff\n${block.text}\n\`\`\``;
+						}
+						return '';
+					})
+					.filter(Boolean)
 					.join('\n\n');
 				
 				try {
@@ -936,7 +952,22 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Icon based on status
 		const iconSpan = contentEl.createSpan({ cls: 'acp-permission-icon' });
-		setIcon(iconSpan, 'loader');
+		const status = chunk.status || 'pending';
+		switch (status) {
+			case 'in_progress':
+				setIcon(iconSpan, 'play-circle');
+				break;
+			case 'completed':
+				setIcon(iconSpan, 'check-circle');
+				break;
+			case 'failed':
+				setIcon(iconSpan, 'x-circle');
+				break;
+			case 'pending':
+			default:
+				setIcon(iconSpan, 'loader');
+				break;
+		}
 
 		const titleEl = contentEl.createSpan({
 			text: chunk.title || `Tool: ${chunk.kind || 'Unknown'}`,
@@ -1221,12 +1252,12 @@ export class ChatView extends ItemView implements ChatInterface {
 		const isDisconnected = !this.connectionStatus.connected;
 		const isInputEmpty = !this.inputField.value.trim();
 
-		// Input field stays enabled whenever connected (Req 1.2)
-		this.inputField.disabled = isDisconnected;
+		// Input field disabled when disconnected or restoring a session (Req 1.2)
+		this.inputField.disabled = isDisconnected || this.isRestoringSession;
 
-		// Send button disabled only when disconnected or (not processing and input empty) (Req 2.3)
+		// Send button disabled when disconnected, restoring, or (not processing and input empty) (Req 2.3)
 		this.sendButton.disabled =
-			isDisconnected || (!this.isProcessing && isInputEmpty);
+			isDisconnected || this.isRestoringSession || (!this.isProcessing && isInputEmpty);
 
 		// Show cancel icon only when processing with empty queue (Req 2.1, 2.2)
 		const isCancelMode = this.isProcessing && this.messageQueue.length === 0;
@@ -1234,6 +1265,8 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		if (isDisconnected) {
 			this.inputField.placeholder = 'Connect to an AI assistant';
+		} else if (this.isRestoringSession) {
+			this.inputField.placeholder = 'Restoring conversation...';
 		} else {
 			this.inputField.placeholder = 'Type your message here...';
 		}
@@ -1701,6 +1734,15 @@ export class ChatView extends ItemView implements ChatInterface {
 			?.get(this.currentAgentId ?? '')
 			?.agentCapabilities;
 
+		this.isRestoringSession = true;
+		this.updateInputState();
+		this.messagesContainer.empty();
+
+		const loadingContainer = this.messagesContainer.createDiv('acp-loading-container');
+		const spinnerSpan = loadingContainer.createSpan({ cls: 'acp-loading-spinner' });
+		setIcon(spinnerSpan, 'loader');
+		loadingContainer.createSpan({ text: 'Restoring conversation...' });
+
 		let liveSessionId: string;
 		try {
 			liveSessionId = await this.sessionManager.loadSession(
@@ -1710,10 +1752,25 @@ export class ChatView extends ItemView implements ChatInterface {
 				agentCapabilities
 			);
 		} catch (err) {
+			this.isRestoringSession = false;
+			this.updateInputState();
+			this.messagesContainer.empty();
+			if (this.currentSessionId) {
+				const prevSession = this.sessionManager.getSessionInfo(this.currentSessionId);
+				if (prevSession) {
+					prevSession.messages.forEach((msg: Message) => {
+						const displayMsg = this.cleanMessageForDisplay(msg);
+						this.displayMessage(displayMsg);
+					});
+				}
+			}
 			new Notice(`Failed to load session: ${(err as any).message ?? err}`);
 			return;
+		} finally {
+			this.isRestoringSession = false;
 		}
 
+		this.updateInputState();
 		const session = this.sessionManager.getSessionInfo(liveSessionId);
 		if (!session) return;
 

@@ -1819,3 +1819,36 @@ body {
 .permission-buttons button.mod-cta:hover {
 	background: var(--interactive-accent-hover);
 }
+
+/* Restoration Loading Styles */
+.acp-loading-container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	min-height: 200px;
+	color: var(--text-muted);
+	gap: 12px;
+	padding: 40px;
+	text-align: center;
+}
+
+.acp-loading-spinner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--interactive-accent);
+}
+
+.acp-loading-spinner svg {
+	width: 32px;
+	height: 32px;
+	animation: acp-spin 1s linear infinite;
+}
+
+@keyframes acp-spin {
+	100% {
+		transform: rotate(360deg);
+	}
+}

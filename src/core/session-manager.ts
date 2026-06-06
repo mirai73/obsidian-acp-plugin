@@ -50,6 +50,8 @@ export interface SessionContext {
   attachedDocumentPath?: string; // Path of the document attached to this session
   /** Stable persisted record ID — set after the first successful disk save. */
   persistedId?: string;
+  /** Whether the session is currently restoring/loading history from disk. */
+  isRestoring?: boolean;
 }
 
 /**
@@ -310,6 +312,12 @@ export class SessionManagerImpl implements SessionManager {
     // Update session activity
     session.lastActivity = new Date();
 
+    // If we are currently restoring, ignore replayed history notifications.
+    // The fully-hydrated messages and tool calls are already loaded from disk.
+    if (session.isRestoring) {
+      return;
+    }
+
     // Handle agent_message_chunk for streaming responses
     if (
       update &&
@@ -383,6 +391,18 @@ export class SessionManagerImpl implements SessionManager {
       };
       session.toolCalls.set(update.toolCallId, toolCall);
 
+      // Add to session messages history as a special system message
+      const toolCallMsg: Message = {
+        role: 'system',
+        content: [
+          {
+            type: 'tool_call',
+            toolCall: toolCall,
+          } as any,
+        ],
+      };
+      session.messages.push(toolCallMsg);
+
       // Notify UI
       if (this.options.onStreamingChunk) {
         this.options.onStreamingChunk(sessionId, {
@@ -408,8 +428,27 @@ export class SessionManagerImpl implements SessionManager {
           existingCall.locations = update.locations;
         if (update.rawInput !== undefined)
           existingCall.rawInput = update.rawInput;
-        if (update.rawOutput !== undefined)
-          existingCall.rawOutput = update.rawOutput;
+        // Also update the tool call block in the messages array
+        const toolMsg = session.messages.find((m) =>
+          m.role === 'system' &&
+          m.content.some((b) => b.type === 'tool_call' && b.toolCall?.toolCallId === update.toolCallId)
+        );
+        if (toolMsg) {
+          const block = toolMsg.content.find((b) => b.type === 'tool_call' && b.toolCall?.toolCallId === update.toolCallId);
+          if (block && block.toolCall) {
+            const tc = block.toolCall;
+            if (update.title !== undefined) tc.title = update.title;
+            if (update.kind !== undefined) tc.kind = update.kind;
+            if (update.status !== undefined) tc.status = update.status;
+            if (update.content !== undefined) {
+              tc.content = tc.content || [];
+              tc.content.push(...update.content);
+            }
+            if (update.locations !== undefined) tc.locations = update.locations;
+            if (update.rawInput !== undefined) tc.rawInput = update.rawInput;
+            if (update.rawOutput !== undefined) tc.rawOutput = update.rawOutput;
+          }
+        }
 
         // Notify UI
         if (this.options.onStreamingChunk) {
@@ -587,12 +626,27 @@ export class SessionManagerImpl implements SessionManager {
         toolCalls: new Map(),
         attachedDocumentPath: record.attachedDocumentPath,
         persistedId: record.id,
+        isRestoring: true, // Mark as restoring to ignore replayed updates
       };
       this.sessions.set(record.agentSessionId, sessionContext);
+
+      // Populate toolCalls map from the loaded messages
+      if (sessionContext.toolCalls) {
+        for (const msg of sessionContext.messages) {
+          if (msg.role === 'system') {
+            const block = msg.content.find((b) => b.type === 'tool_call');
+            const tc = block?.toolCall;
+            if (block && tc) {
+              sessionContext.toolCalls.set(tc.toolCallId, tc);
+            }
+          }
+        }
+      }
 
       try {
         await jsonRpcClient.sendRequest('session/load', loadParams);
         // Agent has fully replayed history — session is ready
+        sessionContext.isRestoring = false;
         return record.agentSessionId;
       } catch (err) {
         // session/load failed — remove the optimistic context and fall through
@@ -634,6 +688,19 @@ export class SessionManagerImpl implements SessionManager {
       attachedDocumentPath: record.attachedDocumentPath,
       persistedId: record.id,
     };
+
+    // Populate toolCalls map from the loaded messages
+    if (sessionContext.toolCalls) {
+      for (const msg of sessionContext.messages) {
+        if (msg.role === 'system') {
+          const block = msg.content.find((b) => b.type === 'tool_call');
+          const tc = block?.toolCall;
+          if (block && tc) {
+            sessionContext.toolCalls.set(tc.toolCallId, tc);
+          }
+        }
+      }
+    }
 
     this.sessions.set(result.sessionId, sessionContext);
     return result.sessionId;

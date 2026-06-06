@@ -176,9 +176,9 @@ export class SessionPersistenceService {
 
   serializeMessages(session: SessionContext): PersistedMessage[] {
     return session.messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
       .map((m) => ({
-        role: m.role as 'user' | 'assistant',
+        role: m.role as 'user' | 'assistant' | 'system',
         content: m.content
           .filter((b) => this.isSerializableBlock(b))
           .map((b) => this.serializeBlock(b)),
@@ -187,7 +187,7 @@ export class SessionPersistenceService {
   }
 
   private isSerializableBlock(block: any): boolean {
-    return ['text', 'image', 'diff', 'resource', 'resource_link'].includes(
+    return ['text', 'image', 'diff', 'resource', 'resource_link', 'tool_call'].includes(
       block.type
     );
   }
@@ -201,6 +201,7 @@ export class SessionPersistenceService {
     if (block.uri !== undefined) out.uri = block.uri;
     if (block.name !== undefined) out.name = block.name;
     if (block.size !== undefined) out.size = block.size;
+    if (block.toolCall !== undefined) out.toolCall = block.toolCall;
     return out;
   }
 }

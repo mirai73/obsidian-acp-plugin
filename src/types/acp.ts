@@ -113,7 +113,7 @@ export interface Message {
 }
 
 export interface ContentBlock {
-	type: 'text' | 'image' | 'resource' | 'diff' | 'resource_link' | 'resource';
+	type: 'text' | 'image' | 'resource' | 'diff' | 'resource_link' | 'resource' | 'tool_call';
 	text?: string;
 	source?: string;
 	data?: string;
@@ -126,6 +126,7 @@ export interface ContentBlock {
 		mimeType?: string;
 		text?: string;
 	};
+	toolCall?: ToolCall;
 }
 
 export interface SessionPromptParams {
