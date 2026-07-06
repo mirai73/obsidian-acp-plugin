@@ -1772,20 +1772,47 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.metadataBar.style.display = 'flex';
 
 		// Context window usage progress bar
-		const contextItem = this.metadataBar.createDiv('acp-metadata-item');
-		contextItem.createSpan({ text: 'Context: ' });
-		const progressBg = contextItem.createDiv('acp-metadata-progress-bg');
-		const usagePercent = Math.round((metadata.contextUsage || 0) * 100);
-		const progressFg = progressBg.createDiv('acp-metadata-progress-fg');
-		progressFg.style.width = `${Math.min(usagePercent, 100)}%`;
-		contextItem.createSpan({ text: ` ${usagePercent}%` });
+		const hasUsagePercent = metadata.contextUsagePercentage !== undefined;
+		const hasUsage = metadata.contextUsage !== undefined;
+		
+		if (hasUsagePercent || hasUsage) {
+			const contextItem = this.metadataBar.createDiv('acp-metadata-item');
+			contextItem.createSpan({ text: 'Context: ' });
+			const progressBg = contextItem.createDiv('acp-metadata-progress-bg');
+			const usagePercent = hasUsagePercent
+				? Math.round(metadata.contextUsagePercentage)
+				: Math.round((metadata.contextUsage || 0) * 100);
+			const progressFg = progressBg.createDiv('acp-metadata-progress-fg');
+			progressFg.style.width = `${Math.min(Math.max(usagePercent, 0), 100)}%`;
+			contextItem.createSpan({ text: ` ${usagePercent}%` });
+		}
 
 		// Credit/token info
-		const infoItem = this.metadataBar.createDiv('acp-metadata-item');
-		const creditText = metadata.creditUsage !== undefined
-			? `Credits: $${metadata.creditUsage.toFixed(2)}`
-			: `${metadata.tokenCount || 0} tokens`;
-		infoItem.createSpan({ text: creditText });
+		let creditText = '';
+		if (metadata.meteringUsage && Array.isArray(metadata.meteringUsage) && metadata.meteringUsage.length > 0) {
+			creditText = metadata.meteringUsage.map((m: any) => {
+				if (m.unit === 'credit') {
+					return `$${m.value.toFixed(4)}`;
+				}
+				return `${m.value} ${m.unitPlural || m.unit}`;
+			}).join(', ');
+		} else if (metadata.creditUsage !== undefined) {
+			creditText = `Credits: $${metadata.creditUsage.toFixed(2)}`;
+		} else if (metadata.tokenCount !== undefined) {
+			creditText = `${metadata.tokenCount} tokens`;
+		}
+
+		if (creditText) {
+			const infoItem = this.metadataBar.createDiv('acp-metadata-item');
+			infoItem.createSpan({ text: creditText });
+		}
+
+		// Turn duration info
+		if (metadata.turnDurationMs !== undefined) {
+			const durationItem = this.metadataBar.createDiv('acp-metadata-item');
+			const durationSec = (metadata.turnDurationMs / 1000).toFixed(1);
+			durationItem.createSpan({ text: `Time: ${durationSec}s` });
+		}
 	}
 
 	private async startNewConversation(): Promise<void> {

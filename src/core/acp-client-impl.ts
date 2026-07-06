@@ -522,11 +522,12 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
   }
 
   private handleKiroMetadata(params: any): void {
+    const { sessionId, ...metadata } = params;
     this.handleSessionUpdate({
-      sessionId: params.sessionId,
+      sessionId,
       update: {
         sessionUpdate: 'kiro_metadata_update',
-        metadata: params.metadata
+        metadata
       }
     });
   }
