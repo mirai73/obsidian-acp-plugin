@@ -71,6 +71,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	private ensureSessionPromise: Promise<string> | null = null;
 	private messageQueue: QueuedMessage[] = [];
 	private queueIndicator: HTMLElement | null = null;
+	private metadataBar: HTMLElement | null = null;
 	private isRestoringSession = false;
 
 	// Selected text context
@@ -218,7 +219,7 @@ export class ChatView extends ItemView implements ChatInterface {
 					if (sessionInfo && sessionInfo.availableCommands) {
 						this.agentCommands = sessionInfo.availableCommands.map((c) => ({
 							description: c.description,
-							name: `/${c.name}`,
+							name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 						}));
 					} else {
 						this.agentCommands = [];
@@ -307,6 +308,10 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Clean input container
 		this.inputContainer = chatWrapper.createDiv('acp-input-container');
+
+		// Metadata bar (initially hidden)
+		this.metadataBar = chatWrapper.createDiv('acp-metadata-bar');
+		this.metadataBar.style.display = 'none';
 
 		// Context row: document box + selection badge sit side-by-side
 		const contextRow = this.inputContainer.createDiv('acp-context-row');
@@ -440,14 +445,28 @@ export class ChatView extends ItemView implements ChatInterface {
 			const value = this.inputField.value;
 			const cursorPosition = this.inputField.selectionStart;
 
-			// Check if we just typed a slash at the beginning or after a space
+			// Check if we just typed a slash at the beginning
 			if (
 				value.startsWith('/') &&
 				cursorPosition <= value.split('\n')[0].length
 			) {
-				const query = value.substring(1).toLowerCase();
-				this.showCommandDropdown(query);
-				console.log('commands');
+				const firstSpace = value.indexOf(' ');
+				if (firstSpace !== -1) {
+					const firstWord = value.substring(0, firstSpace).toLowerCase();
+					const isAgentCommand = this.agentCommands.some(
+						(cmd) => cmd.name.toLowerCase() === firstWord
+					);
+					if (isAgentCommand && this.currentSessionId && this.sessionManager) {
+						const commandName = firstWord.substring(1); // remove slash
+						const argQuery = value.substring(firstSpace + 1);
+						this.showArgumentDropdown(commandName, argQuery);
+					} else {
+						this.hideCommandDropdown();
+					}
+				} else {
+					const query = value.substring(1).toLowerCase();
+					this.showCommandDropdown(query);
+				}
 			} else {
 				this.hideCommandDropdown();
 			}
@@ -680,11 +699,33 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (sessionId !== this.currentSessionId) return;
 
 		if (chunk.type === 'available_commands_update') {
-			this.agentCommands = (chunk.commands || []).map((c: any) => ({
-				description: c.description,
-				name: `/${c.name}`,
-				input: c.input,
-			}));
+			this.agentCommands = (chunk.commands || []).map((c: any) => {
+				return {
+					description: c.description,
+					name: c.name.startsWith('/') ? c.name : `/${c.name}`,
+					input: c.input,
+				};
+			});
+			return;
+		}
+
+		if (chunk.type === 'kiro_metadata') {
+			this.updateMetadataBar(chunk.metadata);
+			return;
+		}
+
+		if (chunk.type === 'kiro_compaction') {
+			if (chunk.status === 'compacting') {
+				this.displayMessage({
+					role: 'system',
+					content: [{ type: 'text', text: '⚡ Compacting conversation context to free up tokens...' }]
+				});
+			} else if (chunk.status === 'completed') {
+				this.displayMessage({
+					role: 'system',
+					content: [{ type: 'text', text: `✅ Compaction completed. Freed ${chunk.freedTokens || 0} tokens. Summary: ${chunk.summary || 'N/A'}` }]
+				});
+			}
 			return;
 		}
 
@@ -1599,6 +1640,39 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
+	private async showArgumentDropdown(command: string, query: string): Promise<void> {
+		if (!this.commandDropdown || !this.currentSessionId || !this.sessionManager) return;
+
+		try {
+			const options = await this.sessionManager.getCommandOptions(
+				this.currentSessionId,
+				command,
+				query
+			);
+
+			if (options.length === 0) {
+				this.hideCommandDropdown();
+				return;
+			}
+
+			// Format options as AcpCommand objects for the existing renderer
+			this.filteredCommands = options.map((opt) => ({
+				name: opt.value,
+				description: opt.label,
+				isArgumentOption: true,
+				commandPrefix: `/${command} `,
+			}));
+
+			this.renderCommandList(this.filteredCommands);
+			this.commandDropdown.style.display = 'block';
+			this.selectedCommandIndex = 0;
+			this.highlightSelectedCommand();
+		} catch (err) {
+			console.warn('Failed to display argument dropdown:', err);
+			this.hideCommandDropdown();
+		}
+	}
+
 	private renderCommandList(commands: AcpCommand[]): void {
 		if (!this.commandDropdown) return;
 
@@ -1606,12 +1680,12 @@ export class ChatView extends ItemView implements ChatInterface {
 		commands.forEach((action, index) => {
 			const item = this.commandDropdown!.createDiv('acp-dropdown-item');
 
-			// const text = item.createSpan('acp-dropdown-text');
-			// text.textContent = action.text;
+			const text = item.createSpan('acp-dropdown-text');
+			text.textContent = action.name || '';
 
-			if (action.name) {
+			if (action.description) {
 				const cmdHint = item.createSpan('acp-dropdown-hint');
-				cmdHint.textContent = action.name;
+				cmdHint.textContent = action.description;
 				cmdHint.style.marginLeft = 'auto';
 				cmdHint.style.opacity = '0.5';
 				cmdHint.style.fontSize = '0.8em';
@@ -1653,12 +1727,37 @@ export class ChatView extends ItemView implements ChatInterface {
 	}
 
 	private selectCommand(action: any): void {
-		if (action.name) {
+		if (action.isArgumentOption) {
+			this.inputField.value = action.commandPrefix + action.name + ' ';
+		} else if (action.name) {
 			this.inputField.value = action.name + ' ';
-			this.autoResizeTextarea();
-			this.inputField.focus();
 		}
+		this.autoResizeTextarea();
+		this.inputField.focus();
 		this.hideCommandDropdown();
+	}
+
+	private updateMetadataBar(metadata: any): void {
+		if (!this.metadataBar || !metadata) return;
+
+		this.metadataBar.empty();
+		this.metadataBar.style.display = 'flex';
+
+		// Context window usage progress bar
+		const contextItem = this.metadataBar.createDiv('acp-metadata-item');
+		contextItem.createSpan({ text: 'Context: ' });
+		const progressBg = contextItem.createDiv('acp-metadata-progress-bg');
+		const usagePercent = Math.round((metadata.contextUsage || 0) * 100);
+		const progressFg = progressBg.createDiv('acp-metadata-progress-fg');
+		progressFg.style.width = `${Math.min(usagePercent, 100)}%`;
+		contextItem.createSpan({ text: ` ${usagePercent}%` });
+
+		// Credit/token info
+		const infoItem = this.metadataBar.createDiv('acp-metadata-item');
+		const creditText = metadata.creditUsage !== undefined
+			? `Credits: $${metadata.creditUsage.toFixed(2)}`
+			: `${metadata.tokenCount || 0} tokens`;
+		infoItem.createSpan({ text: creditText });
 	}
 
 	private async startNewConversation(): Promise<void> {
@@ -1700,6 +1799,10 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 		this.agentCommands = [];
 		this.messagesContainer.empty();
+		if (this.metadataBar) {
+			this.metadataBar.empty();
+			this.metadataBar.style.display = 'none';
+		}
 		this.updateAgentNameDisplay();
 		// Reset document attachment state for the new session
 		this.isDocumentAddedToContext = false;
@@ -1787,6 +1890,13 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.currentAgentId = session.agentId;
 		this.updateAgentNameDisplay();
 		this.messagesContainer.empty();
+		if (this.metadataBar) {
+			this.metadataBar.empty();
+			this.metadataBar.style.display = 'none';
+		}
+		if (session.kiroMetadata) {
+			this.updateMetadataBar(session.kiroMetadata);
+		}
 
 		// Re-render all messages from session
 		session.messages.forEach((msg: Message) => {
@@ -1804,7 +1914,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (session.availableCommands) {
 			this.agentCommands = session.availableCommands.map((c: any) => ({
 				description: c.description,
-				name: `/${c.name}`,
+				name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 				input: c.input,
 			}));
 		} else {

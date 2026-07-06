@@ -534,4 +534,59 @@ describe('SessionManager', () => {
       expect(stats.activeSessions).toBe(0);
     });
   });
+
+  describe('executeAgentCommand', () => {
+    it('should execute command and return output', async () => {
+      const session = await sessionManager.createSession('test-agent', mockJsonRpcClient);
+      mockJsonRpcClient.sendRequest.mockResolvedValue({
+        success: true,
+        output: 'Command execution result',
+      });
+
+      const output = await sessionManager.executeAgentCommand(
+        session.sessionId,
+        'context',
+        'add file.txt'
+      );
+
+      expect(output).toBe('Command execution result');
+      expect(mockJsonRpcClient.sendRequest).toHaveBeenCalledWith(
+        '_kiro.dev/commands/execute',
+        {
+          sessionId: session.sessionId,
+          command: 'context',
+          arguments: 'add file.txt',
+        }
+      );
+    });
+  });
+
+  describe('getCommandOptions', () => {
+    it('should query command options and return them', async () => {
+      const session = await sessionManager.createSession('test-agent', mockJsonRpcClient);
+      mockJsonRpcClient.sendRequest.mockResolvedValue({
+        options: [
+          { value: 'file1.txt', label: 'file1.txt' },
+        ],
+      });
+
+      const options = await sessionManager.getCommandOptions(
+        session.sessionId,
+        'context',
+        'file1'
+      );
+
+      expect(options).toEqual([
+        { value: 'file1.txt', label: 'file1.txt' },
+      ]);
+      expect(mockJsonRpcClient.sendRequest).toHaveBeenCalledWith(
+        '_kiro.dev/commands/options',
+        {
+          sessionId: session.sessionId,
+          command: 'context',
+          query: 'file1',
+        }
+      );
+    });
+  });
 });

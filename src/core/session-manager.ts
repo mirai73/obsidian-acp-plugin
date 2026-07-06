@@ -48,6 +48,7 @@ export interface SessionContext {
   availableCommands?: AvailableCommand[];
   isDocumentAddedToContext?: boolean;
   attachedDocumentPath?: string; // Path of the document attached to this session
+  kiroMetadata?: any; // Kiro metadata usage information
   /** Stable persisted record ID — set after the first successful disk save. */
   persistedId?: string;
   /** Whether the session is currently restoring/loading history from disk. */
@@ -257,6 +258,82 @@ export class SessionManagerImpl implements SessionManager {
 
     // Persist final state
     await this.persistSession(session);
+  }
+
+  /**
+   * Execute a Kiro custom slash command
+   */
+  async executeAgentCommand(
+    sessionId: string,
+    command: string,
+    args: string
+  ): Promise<string> {
+    const session = this.getSession(sessionId);
+
+    if (!session.jsonRpcClient) {
+      throw new Error('No JSON-RPC client configured for session');
+    }
+
+    session.lastActivity = new Date();
+
+    try {
+      const params = {
+        sessionId,
+        command,
+        arguments: args,
+      };
+
+      const result = await session.jsonRpcClient.sendRequest(
+        '_kiro.dev/commands/execute',
+        params
+      );
+
+      // Persist session if state might have changed
+      await this.persistSession(session);
+
+      return result?.output || 'Command executed successfully';
+    } catch (error) {
+      if (error instanceof JsonRpcError) {
+        throw error;
+      }
+      throw new JsonRpcError(
+        JsonRpcErrorCode.INTERNAL_ERROR,
+        `Failed to execute agent command: ${error.message || 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Get auto-completion options for a command from the agent
+   */
+  async getCommandOptions(
+    sessionId: string,
+    command: string,
+    query: string
+  ): Promise<Array<{ value: string; label: string }>> {
+    const session = this.getSession(sessionId);
+
+    if (!session.jsonRpcClient) {
+      throw new Error('No JSON-RPC client configured for session');
+    }
+
+    try {
+      const params = {
+        sessionId,
+        command,
+        query,
+      };
+
+      const result = await session.jsonRpcClient.sendRequest(
+        '_kiro.dev/commands/options',
+        params
+      );
+
+      return result?.options || [];
+    } catch (error) {
+      console.warn('Failed to fetch command options from agent:', error);
+      return [];
+    }
   }
 
   /**
@@ -492,6 +569,23 @@ export class SessionManagerImpl implements SessionManager {
         });
       }
       console.debug('Received available commands for session:', sessionId);
+    } else if (update && update.sessionUpdate === 'kiro_metadata_update') {
+      session.kiroMetadata = update.metadata;
+      if (this.options.onStreamingChunk) {
+        this.options.onStreamingChunk(sessionId, {
+          type: 'kiro_metadata',
+          metadata: update.metadata,
+        });
+      }
+    } else if (update && update.sessionUpdate === 'kiro_compaction_update') {
+      if (this.options.onStreamingChunk) {
+        this.options.onStreamingChunk(sessionId, {
+          type: 'kiro_compaction',
+          status: update.status,
+          freedTokens: update.freedTokens,
+          summary: update.summary,
+        });
+      }
     } else {
       // Handle other types of session updates
       console.log('Received session update:', {

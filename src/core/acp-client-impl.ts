@@ -501,6 +501,48 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
     this.emit('session-update', params);
   }
 
+  private handleKiroCommandsAvailable(params: any): void {
+    this.handleSessionUpdate({
+      sessionId: params.sessionId,
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: params.commands
+      }
+    });
+  }
+
+  private handleKiroAgentSwitched(params: any): void {
+    this.handleSessionUpdate({
+      sessionId: params.sessionId,
+      update: {
+        sessionUpdate: 'current_mode_update',
+        modeId: params.agentName
+      }
+    });
+  }
+
+  private handleKiroMetadata(params: any): void {
+    this.handleSessionUpdate({
+      sessionId: params.sessionId,
+      update: {
+        sessionUpdate: 'kiro_metadata_update',
+        metadata: params.metadata
+      }
+    });
+  }
+
+  private handleKiroCompactionStatus(params: any): void {
+    this.handleSessionUpdate({
+      sessionId: params.sessionId,
+      update: {
+        sessionUpdate: 'kiro_compaction_update',
+        status: params.status,
+        freedTokens: params.freedTokens,
+        summary: params.summary
+      }
+    });
+  }
+
   /**
    * Register method handlers
    */
@@ -806,6 +848,22 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
     // Register notification handlers
     jsonRpcClient.registerNotification('session/update', (params) => {
       this.handleSessionUpdate(params);
+    });
+
+    jsonRpcClient.registerNotification('_kiro.dev/commands/available', (params) => {
+      this.handleKiroCommandsAvailable(params);
+    });
+
+    jsonRpcClient.registerNotification('_kiro.dev/agent/switched', (params) => {
+      this.handleKiroAgentSwitched(params);
+    });
+
+    jsonRpcClient.registerNotification('_kiro.dev/metadata', (params) => {
+      this.handleKiroMetadata(params);
+    });
+
+    jsonRpcClient.registerNotification('_kiro.dev/compaction/status', (params) => {
+      this.handleKiroCompactionStatus(params);
     });
   }
 }

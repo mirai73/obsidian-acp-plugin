@@ -71,6 +71,8 @@ export interface SessionManager {
 
   sendPrompt(sessionId: string, messages: Message[]): Promise<PromptResult>;
   cancelSession(sessionId: string): Promise<void>;
+  executeAgentCommand(sessionId: string, command: string, args: string): Promise<string>;
+  getCommandOptions(sessionId: string, command: string, query: string): Promise<Array<{ value: string; label: string }>>;
   updateSession(sessionId: string, update: SessionUpdate): void;
   setMode(sessionId: string, modeId: string): Promise<void>;
   handleStreamingUpdate(params: any): void;
