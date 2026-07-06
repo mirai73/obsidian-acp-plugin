@@ -171,12 +171,15 @@ export interface SessionRequestPermissionResult {
 	};
 }
 
-// Commands
 export interface AvailableCommand {
 	name: string;
 	description: string;
 	input?: {
 		hint: string;
+	};
+	meta?: {
+		local?: boolean;
+		[key: string]: any;
 	};
 }
 
@@ -256,4 +259,5 @@ export interface AcpCommand {
 	name: string;
 	description: string;
 	input?: any;
+	local?: boolean;
 }

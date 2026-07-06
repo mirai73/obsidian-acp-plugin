@@ -220,6 +220,7 @@ export class ChatView extends ItemView implements ChatInterface {
 						this.agentCommands = sessionInfo.availableCommands.map((c) => ({
 							description: c.description,
 							name: c.name.startsWith('/') ? c.name : `/${c.name}`,
+							local: c.meta?.local || false,
 						}));
 					} else {
 						this.agentCommands = [];
@@ -549,6 +550,32 @@ export class ChatView extends ItemView implements ChatInterface {
 		const turnSessionId = this.currentSessionId!;
 		this.isProcessing = true;
 		this.updateInputState();
+
+		// Intercept and block commands flagged as local
+		const firstWord = text.split(' ')[0].toLowerCase();
+		const matchingCommand = this.agentCommands.find(
+			(cmd) => cmd.name.toLowerCase() === firstWord
+		);
+
+		if (matchingCommand && matchingCommand.local) {
+			this.isProcessing = false;
+			this.updateInputState();
+
+			// Remove the temporary streaming container if created
+			const streamingContainer = this.messagesContainer?.querySelector(
+				'.streaming-message'
+			);
+			if (streamingContainer) {
+				streamingContainer.remove();
+			}
+
+			this.displayMessage({
+				role: 'system',
+				content: [{ type: 'text', text: `Command '${firstWord}' is a local command and is not executed.` }],
+			});
+			return;
+		}
+
 		try {
 			await this.sessionManager!.sendPrompt(turnSessionId, [agentMessage]);
 			if (turnSessionId === this.currentSessionId) {
@@ -704,6 +731,7 @@ export class ChatView extends ItemView implements ChatInterface {
 					description: c.description,
 					name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 					input: c.input,
+					local: c.meta?.local || false,
 				};
 			});
 			return;
@@ -1916,6 +1944,7 @@ export class ChatView extends ItemView implements ChatInterface {
 				description: c.description,
 				name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 				input: c.input,
+				local: c.meta?.local || false,
 			}));
 		} else {
 			this.agentCommands = [];
