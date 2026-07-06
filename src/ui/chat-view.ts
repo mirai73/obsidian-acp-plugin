@@ -389,6 +389,7 @@ export class ChatView extends ItemView implements ChatInterface {
 				if (this.currentSessionId && this.sessionManager) {
 					this.cancelPendingPermissions();
 					this.sessionManager.cancelSession(this.currentSessionId);
+					this.finalizeStreamingMessage();
 					this.isProcessing = false;
 				}
 			} else {
@@ -532,10 +533,18 @@ export class ChatView extends ItemView implements ChatInterface {
 		try {
 			await this.sessionManager!.sendPrompt(turnSessionId, [agentMessage]);
 			if (turnSessionId === this.currentSessionId) {
-				this.finalizeStreamingMessage();
+				const session = this.sessionManager?.getSessionInfo(turnSessionId);
+				const lastMsg = session?.messages[session.messages.length - 1];
+				const textContent = lastMsg?.content.find(b => b.type === 'text')?.text || '';
+				this.finalizeStreamingMessage(textContent);
 			}
 		} catch (error) {
 			if (turnSessionId === this.currentSessionId) {
+				// Suppress error display if the session was cancelled by the user
+				const session = this.sessionManager?.getSessionInfo(turnSessionId);
+				if (session && session.status === 'cancelled') {
+					return;
+				}
 				// Suppress error display if the turn was cancelled by the user
 				if (
 					!this.pendingPermissionResolvers.size &&
@@ -732,7 +741,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	/**
 	 * Finalize streaming message (called when streaming is complete)
 	 */
-	private finalizeStreamingMessage(): void {
+	private finalizeStreamingMessage(finalContentParam?: string): void {
 		const streamingContainer = this.messagesContainer?.querySelector(
 			'.streaming-message'
 		) as HTMLElement;
@@ -746,8 +755,8 @@ export class ChatView extends ItemView implements ChatInterface {
 				'.message-content'
 			) as HTMLElement;
 			let finalContent = '';
-			if (messageContent && messageContent.textContent) {
-				finalContent = messageContent.textContent;
+			if (messageContent) {
+				finalContent = finalContentParam !== undefined ? finalContentParam : (messageContent.textContent || '');
 				messageContent.innerHTML = '';
 				messageContent.addClass('acp-markdown-content');
 				this.renderMarkdownContent(finalContent, messageContent);

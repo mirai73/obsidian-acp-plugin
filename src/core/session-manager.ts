@@ -238,6 +238,12 @@ export class SessionManagerImpl implements SessionManager {
       try {
         const params: SessionCancelParams = { sessionId };
         session.jsonRpcClient.sendNotification('session/cancel', params);
+
+        // Also cancel the pending session/prompt request for this session with a 2-second fallback timeout
+        session.jsonRpcClient.cancelRequests(
+          (req) => req.method === 'session/prompt' && req.params?.sessionId === sessionId,
+          2000
+        );
       } catch (error) {
         console.warn(
           'Failed to notify agent about session cancellation:',
@@ -305,6 +311,14 @@ export class SessionManagerImpl implements SessionManager {
     if (!session) {
       console.warn(
         `Received streaming update for unknown session: ${sessionId}`
+      );
+      return;
+    }
+
+    // Ignore updates for cancelled sessions
+    if (session.status === 'cancelled') {
+      console.debug(
+        `Ignoring streaming update for cancelled session: ${sessionId}`
       );
       return;
     }

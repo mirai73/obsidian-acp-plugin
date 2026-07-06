@@ -220,6 +220,24 @@ describe('Request Tracker', () => {
 		expect(tracker.getPendingCount()).toBe(0);
 	});
 
+	test('should cancel requests matching a predicate', () => {
+		const mockResolve = jest.fn();
+		const mockReject = jest.fn();
+
+		tracker.trackRequest('test-id-1', 'method1', mockResolve, mockReject, undefined, { sessionId: 'session-1' });
+		tracker.trackRequest('test-id-2', 'method1', mockResolve, mockReject, undefined, { sessionId: 'session-2' });
+		tracker.trackRequest('test-id-3', 'method2', mockResolve, mockReject, undefined, { sessionId: 'session-1' });
+
+		expect(tracker.getPendingCount()).toBe(3);
+
+		tracker.cancelRequests((req) => req.method === 'method1' && req.params?.sessionId === 'session-1');
+
+		expect(tracker.getPendingCount()).toBe(2);
+		expect(tracker.getRequest('test-id-1')).toBeUndefined();
+		expect(tracker.getRequest('test-id-2')).toBeDefined();
+		expect(tracker.getRequest('test-id-3')).toBeDefined();
+	});
+
 	test('should provide request statistics', () => {
 		const mockResolve = jest.fn();
 		const mockReject = jest.fn();

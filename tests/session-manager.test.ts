@@ -42,6 +42,7 @@ describe('SessionManager', () => {
       unregisterNotification: jest.fn(),
       cancelRequest: jest.fn(),
       cancelAllRequests: jest.fn(),
+      cancelRequests: jest.fn(),
       getStats: jest.fn(),
       close: jest.fn(),
       onError: jest.fn(),
@@ -51,10 +52,12 @@ describe('SessionManager', () => {
       cleanupOldRequests: jest.fn(),
     } as any;
 
+    let mockSessionCounter = 0;
     mockJsonRpcClient.sendRequest.mockImplementation((method) => {
       if (method === 'session/new') {
+        mockSessionCounter++;
         return Promise.resolve({
-          sessionId: `session_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          sessionId: `session_${Date.now()}_${mockSessionCounter}`,
           modes: { currentModeId: 'default', availableModes: [] },
         });
       }
@@ -273,6 +276,60 @@ describe('SessionManager', () => {
         'session/cancel',
         { sessionId }
       );
+    });
+
+    it('should invoke cancelRequests when cancelling session', async () => {
+      // Add a pending operation to trigger agent notification
+      const testMessages: Message[] = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'Test' }],
+        },
+      ];
+
+      // Start a prompt (but don't wait for it)
+      mockJsonRpcClient.sendRequest.mockImplementation(
+        () => new Promise(() => {})
+      ); // Never resolves
+      sessionManager.sendPrompt(sessionId, testMessages).catch(() => {}); // Ignore the error
+
+      // Now cancel the session
+      mockJsonRpcClient.sendNotification.mockImplementation(() => {});
+      await sessionManager.cancelSession(sessionId);
+
+      expect(mockJsonRpcClient.cancelRequests).toHaveBeenCalled();
+    });
+
+    it('should ignore streaming updates for cancelled sessions', async () => {
+      // Setup: first cancel the session
+      await sessionManager.cancelSession(sessionId);
+
+      // Create a mock stream chunk listener
+      const mockOnStreamingChunk = jest.fn();
+      const managerWithOptions = new SessionManagerImpl({
+        onStreamingChunk: mockOnStreamingChunk,
+      });
+
+      // Recreate session with this new manager options
+      const s = await managerWithOptions.createSession('test-agent', mockJsonRpcClient);
+      const tempSessionId = s.sessionId;
+
+      // Cancel it
+      await managerWithOptions.cancelSession(tempSessionId);
+
+      // Send update
+      managerWithOptions.handleStreamingUpdate({
+        sessionId: tempSessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'Stale chunk' },
+        },
+      });
+
+      expect(mockOnStreamingChunk).not.toHaveBeenCalled();
+
+      // Cleanup to prevent Jest from keeping timers open
+      await managerWithOptions.shutdown();
     });
 
     it('should throw error for non-existent session', async () => {

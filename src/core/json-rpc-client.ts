@@ -28,7 +28,7 @@ import {
   MethodHandler,
   NotificationHandler,
 } from './message-dispatcher';
-import { RequestTracker } from './request-tracker';
+import { RequestTracker, PendingRequest } from './request-tracker';
 import { errorHandler, ErrorCategory } from './error-handler';
 import { logger, LogCategory } from './logging-system';
 import {
@@ -239,7 +239,8 @@ export class JsonRpcClient {
           );
           reject(new Error(error.message + '\n' + error.data ?? ''));
         },
-        timeout
+        timeout,
+        params
       );
 
       // Send the request
@@ -341,6 +342,32 @@ export class JsonRpcClient {
    */
   cancelAllRequests(): void {
     this.requestTracker.cancelAllRequests();
+  }
+
+  /**
+   * Cancel pending requests matching a predicate, optionally with a fallback timeout
+   */
+  cancelRequests(predicate: (req: PendingRequest) => boolean, timeoutMs?: number): void {
+    if (timeoutMs !== undefined && timeoutMs > 0) {
+      const pending = this.requestTracker.getPendingRequestIds()
+        .map(id => this.requestTracker.getRequest(id))
+        .filter((req): req is PendingRequest => !!req && predicate(req));
+      
+      for (const req of pending) {
+        setTimeout(() => {
+          if (this.requestTracker.getRequest(req.id)) {
+            logger.warn(LogCategory.PROTOCOL, 'Request cancel timeout reached. Force-cancelling request locally.', {
+              id: req.id,
+              method: req.method,
+              sessionId: this.sessionId,
+            });
+            this.cancelRequest(req.id);
+          }
+        }, timeoutMs);
+      }
+    } else {
+      this.requestTracker.cancelRequests(predicate);
+    }
   }
 
   /**

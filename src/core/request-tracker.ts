@@ -9,6 +9,7 @@ import { createError } from '../utils/json-rpc';
 export interface PendingRequest {
 	id: string | number;
 	method: string;
+	params?: any;
 	timestamp: number;
 	timeout?: number;
 	resolve: (result: any) => void;
@@ -36,7 +37,8 @@ export class RequestTracker {
 		method: string,
 		resolve: (result: any) => void,
 		reject: (error: JsonRpcError) => void,
-		timeout?: number
+		timeout?: number,
+		params?: any
 	): void {
 		// Remove any existing request with the same ID
 		this.removeRequest(id);
@@ -45,6 +47,7 @@ export class RequestTracker {
 		const request: PendingRequest = {
 			id,
 			method,
+			params,
 			timestamp: Date.now(),
 			timeout: actualTimeout,
 			resolve,
@@ -174,6 +177,17 @@ export class RequestTracker {
 	cancelAllRequests(): void {
 		for (const [id] of this.pendingRequests) {
 			this.removeRequest(id);
+		}
+	}
+
+	/**
+	 * Cancel pending requests matching a predicate
+	 */
+	cancelRequests(predicate: (req: PendingRequest) => boolean): void {
+		for (const [id, request] of this.pendingRequests) {
+			if (predicate(request)) {
+				this.removeRequest(id);
+			}
 		}
 	}
 
