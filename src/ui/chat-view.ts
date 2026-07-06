@@ -1787,24 +1787,44 @@ export class ChatView extends ItemView implements ChatInterface {
 			contextItem.createSpan({ text: ` ${usagePercent}%` });
 		}
 
-		// Credit/token info
+		// Credit/token/metering info
+		let hasCredits = false;
+		let creditsValue = '';
 		let creditText = '';
+
 		if (metadata.meteringUsage && Array.isArray(metadata.meteringUsage) && metadata.meteringUsage.length > 0) {
-			creditText = metadata.meteringUsage.map((m: any) => {
-				if (m.unit === 'credit') {
-					return `$${m.value.toFixed(4)}`;
+			const creditMeter = metadata.meteringUsage.find((m: any) => m.unit === 'credit');
+			if (creditMeter) {
+				hasCredits = true;
+				creditsValue = creditMeter.value.toFixed(4);
+				// Join remaining non-credit metering if any
+				const others = metadata.meteringUsage.filter((m: any) => m.unit !== 'credit');
+				if (others.length > 0) {
+					creditText = others.map((m: any) => `${m.value} ${m.unitPlural || m.unit}`).join(', ');
 				}
-				return `${m.value} ${m.unitPlural || m.unit}`;
-			}).join(', ');
+			} else {
+				creditText = metadata.meteringUsage.map((m: any) => `${m.value} ${m.unitPlural || m.unit}`).join(', ');
+			}
 		} else if (metadata.creditUsage !== undefined) {
-			creditText = `Credits: $${metadata.creditUsage.toFixed(2)}`;
+			hasCredits = true;
+			creditsValue = metadata.creditUsage.toFixed(4);
 		} else if (metadata.tokenCount !== undefined) {
 			creditText = `${metadata.tokenCount} tokens`;
 		}
 
-		if (creditText) {
+		if (hasCredits || creditText) {
 			const infoItem = this.metadataBar.createDiv('acp-metadata-item');
-			infoItem.createSpan({ text: creditText });
+			
+			if (hasCredits) {
+				const coinIconSpan = infoItem.createSpan({ cls: 'acp-metadata-coin-icon' });
+				setIcon(coinIconSpan, 'coins');
+				infoItem.createSpan({ text: ` ${creditsValue}` });
+				if (creditText) {
+					infoItem.createSpan({ text: ` (${creditText})` });
+				}
+			} else {
+				infoItem.createSpan({ text: creditText });
+			}
 		}
 
 		// Turn duration info

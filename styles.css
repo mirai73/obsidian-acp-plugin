@@ -1887,3 +1887,9 @@ body {
   height: 100%;
   background: var(--interactive-accent);
 }
+
+.acp-metadata-coin-icon svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
+}
