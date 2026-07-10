@@ -42,7 +42,21 @@ export class ChatView extends ItemView implements ChatInterface {
 	private sendButton: HTMLButtonElement;
 	private statusIndicator: HTMLElement;
 	private connectionStatus: ConnectionStatus = { connected: false };
-	private isProcessing = false;
+	private sessionProcessingStates = new Map<string, boolean>();
+	private globalProcessingState = false;
+
+	private get isProcessing(): boolean {
+		if (!this.currentSessionId) return this.globalProcessingState;
+		return this.sessionProcessingStates.get(this.currentSessionId) || false;
+	}
+
+	private set isProcessing(val: boolean) {
+		if (!this.currentSessionId) {
+			this.globalProcessingState = val;
+		} else {
+			this.sessionProcessingStates.set(this.currentSessionId, val);
+		}
+	}
 	private pendingPermissionResolvers = new Map<
 		string,
 		(id: string | null) => void
@@ -69,7 +83,24 @@ export class ChatView extends ItemView implements ChatInterface {
 	private readonly defaultCommands = [];
 	private agentCommands: AcpCommand[] = [];
 	private ensureSessionPromise: Promise<string> | null = null;
-	private messageQueue: QueuedMessage[] = [];
+	private sessionQueues = new Map<string, QueuedMessage[]>();
+	private globalMessageQueue: QueuedMessage[] = [];
+
+	private get messageQueue(): QueuedMessage[] {
+		if (!this.currentSessionId) return this.globalMessageQueue;
+		if (!this.sessionQueues.has(this.currentSessionId)) {
+			this.sessionQueues.set(this.currentSessionId, []);
+		}
+		return this.sessionQueues.get(this.currentSessionId)!;
+	}
+
+	private set messageQueue(queue: QueuedMessage[]) {
+		if (!this.currentSessionId) {
+			this.globalMessageQueue = queue;
+		} else {
+			this.sessionQueues.set(this.currentSessionId, queue);
+		}
+	}
 	private queueIndicator: HTMLElement | null = null;
 	private metadataBar: HTMLElement | null = null;
 	private isRestoringSession = false;
@@ -543,13 +574,14 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.displayMessage(userMessageForUI);
 		this.updateDocumentContextBox();
 		await this.ensureSession();
-		this.dispatchTurn(text, userMessageForAgent);
+		this.dispatchTurn(this.currentSessionId!, text, userMessageForAgent);
 	}
 
-	private async dispatchTurn(text: string, agentMessage: Message): Promise<void> {
-		const turnSessionId = this.currentSessionId!;
-		this.isProcessing = true;
-		this.updateInputState();
+	private async dispatchTurn(sessionId: string, text: string, agentMessage: Message): Promise<void> {
+		this.sessionProcessingStates.set(sessionId, true);
+		if (sessionId === this.currentSessionId) {
+			this.updateInputState();
+		}
 
 		// Intercept and block commands flagged as local
 		const firstWord = text.split(' ')[0].toLowerCase();
@@ -558,14 +590,16 @@ export class ChatView extends ItemView implements ChatInterface {
 		);
 
 		if (matchingCommand && matchingCommand.local) {
-			this.isProcessing = false;
-			this.updateInputState();
+			this.sessionProcessingStates.set(sessionId, false);
+			if (sessionId === this.currentSessionId) {
+				this.updateInputState();
+			}
 
 			// Remove the temporary streaming container if created
 			const streamingContainer = this.messagesContainer?.querySelector(
 				'.streaming-message'
 			);
-			if (streamingContainer) {
+			if (streamingContainer && sessionId === this.currentSessionId) {
 				streamingContainer.remove();
 			}
 
@@ -577,17 +611,17 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		try {
-			await this.sessionManager!.sendPrompt(turnSessionId, [agentMessage]);
-			if (turnSessionId === this.currentSessionId) {
-				const session = this.sessionManager?.getSessionInfo(turnSessionId);
+			await this.sessionManager!.sendPrompt(sessionId, [agentMessage]);
+			if (sessionId === this.currentSessionId) {
+				const session = this.sessionManager?.getSessionInfo(sessionId);
 				const lastMsg = session?.messages[session.messages.length - 1];
 				const textContent = lastMsg?.content.find(b => b.type === 'text')?.text || '';
 				this.finalizeStreamingMessage(textContent);
 			}
 		} catch (error) {
-			if (turnSessionId === this.currentSessionId) {
+			if (sessionId === this.currentSessionId) {
 				// Suppress error display if the session was cancelled by the user
-				const session = this.sessionManager?.getSessionInfo(turnSessionId);
+				const session = this.sessionManager?.getSessionInfo(sessionId);
 				if (session && session.status === 'cancelled') {
 					return;
 				}
@@ -610,17 +644,22 @@ export class ChatView extends ItemView implements ChatInterface {
 				this.displayMessage(errorMessage);
 			}
 		} finally {
-			this.isProcessing = false;
-			this.updateInputState();
-			this.dequeueAndDispatch();
+			this.sessionProcessingStates.set(sessionId, false);
+			if (sessionId === this.currentSessionId) {
+				this.updateInputState();
+			}
+			this.dequeueAndDispatch(sessionId);
 		}
 	}
 
-	private dequeueAndDispatch(): void {
-		if (this.messageQueue.length > 0 && this.currentSessionId) {
-			const next = this.messageQueue.shift()!;
-			this.updateQueueIndicator();
-			this.dispatchTurn(next.text, next.agentMessage);
+	private dequeueAndDispatch(sessionId: string): void {
+		const queue = this.sessionQueues.get(sessionId) || [];
+		if (queue.length > 0) {
+			const next = queue.shift()!;
+			if (sessionId === this.currentSessionId) {
+				this.updateQueueIndicator();
+			}
+			this.dispatchTurn(sessionId, next.text, next.agentMessage);
 		}
 	}
 
@@ -1318,9 +1357,12 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// // Proactively create session if connected
 		if (status.connected && !this.currentSessionId && this.acpClient) {
-			this.ensureSession().catch((err) =>
-				console.error('Failed to proactively create session:', err)
-			);
+			this.ensureSession()
+				.catch((err) => console.error('Failed to proactively create session:', err))
+				.then(() => {
+					this.updateInputState();
+					this.updateQueueIndicator();
+				});
 		}
 	}
 
@@ -1886,6 +1928,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		await this.ensureSession();
 		this.scrollToBottom();
 		this.updateInputState();
+		this.updateQueueIndicator();
 		new Notice(`Started new conversation with ${this.currentAgentId}`);
 	}
 
@@ -2008,6 +2051,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		this.updateDocumentContextBox();
+		this.updateQueueIndicator();
 		this.scrollToBottom();
 		new Notice('Switched to conversation');
 	}

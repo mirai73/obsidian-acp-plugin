@@ -255,6 +255,7 @@ describe('ChatView handleSendMessage() enqueue path', () => {
     expect(displayMessageSpy).toHaveBeenCalledTimes(1);
     expect(dispatchTurnSpy).toHaveBeenCalledTimes(1);
     expect(dispatchTurnSpy).toHaveBeenCalledWith(
+      null,
       'direct message',
       expect.objectContaining({ role: 'user' })
     );
@@ -282,5 +283,35 @@ describe('ChatView handleSendMessage() enqueue path', () => {
 
     expect(displayMessageSpy).not.toHaveBeenCalled();
     expect(dispatchTurnSpy).not.toHaveBeenCalled();
+  });
+
+  test('keeps processing state and message queue isolated per session', () => {
+    // Set up session 1
+    (chatView as any).currentSessionId = 'session-1';
+    (chatView as any).isProcessing = true;
+    (chatView as any).messageQueue = [{ text: 'msg1', agentMessage: { role: 'user', content: [] } }];
+
+    // Switch to session 2 (simulating a new session or starting a new conversation)
+    (chatView as any).currentSessionId = 'session-2';
+    expect((chatView as any).isProcessing).toBe(false);
+    expect((chatView as any).messageQueue).toHaveLength(0);
+
+    // Modify session 2
+    (chatView as any).isProcessing = true;
+    (chatView as any).messageQueue = [
+      { text: 'msg2', agentMessage: { role: 'user', content: [] } },
+      { text: 'msg3', agentMessage: { role: 'user', content: [] } }
+    ];
+
+    // Switch back to session 1
+    (chatView as any).currentSessionId = 'session-1';
+    expect((chatView as any).isProcessing).toBe(true);
+    expect((chatView as any).messageQueue).toHaveLength(1);
+    expect((chatView as any).messageQueue[0].text).toBe('msg1');
+
+    // Switch back to session 2
+    (chatView as any).currentSessionId = 'session-2';
+    expect((chatView as any).isProcessing).toBe(true);
+    expect((chatView as any).messageQueue).toHaveLength(2);
   });
 });
