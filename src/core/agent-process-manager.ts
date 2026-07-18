@@ -248,7 +248,7 @@ export class AgentProcessManager extends EventEmitter {
           ...config.environment,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: process.platform === 'win32' || process.env.SHELL || true,
+        shell: process.platform === 'win32',
       };
       logger.debug(LogCategory.CONNECTION, JSON.stringify(options));
       const childProcess = spawn(config.command, config.args, options);
