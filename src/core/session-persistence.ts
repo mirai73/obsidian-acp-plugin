@@ -87,6 +87,7 @@ export class SessionPersistenceService {
           : String(session.lastActivity),
       messages: this.serializeMessages(session),
       attachedDocumentPath: session.attachedDocumentPath,
+      attachedContextPaths: session.attachedContextPaths,
       title: session.title,
     };
 
@@ -183,6 +184,7 @@ export class SessionPersistenceService {
         content: m.content
           .filter((b) => this.isSerializableBlock(b))
           .map((b) => this.serializeBlock(b)),
+        usedContext: m.usedContext,
       }))
       .filter((m) => m.content.length > 0);
   }

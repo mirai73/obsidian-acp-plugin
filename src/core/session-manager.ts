@@ -48,6 +48,8 @@ export interface SessionContext {
   availableCommands?: AvailableCommand[];
   isDocumentAddedToContext?: boolean;
   attachedDocumentPath?: string; // Path of the document attached to this session
+  /** Additional vault paths (files or folders) added to the context. */
+  attachedContextPaths?: string[];
   kiroMetadata?: any; // Kiro metadata usage information
   /** Stable persisted record ID — set after the first successful disk save. */
   persistedId?: string;
@@ -657,6 +659,7 @@ export class SessionManagerImpl implements SessionManager {
             isLive: false,
             isPersisted: true,
             attachedDocumentPath: record.attachedDocumentPath,
+            attachedContextPaths: record.attachedContextPaths,
           });
         }
       }
@@ -749,6 +752,7 @@ export class SessionManagerImpl implements SessionManager {
         pendingOperations: new Set(),
         toolCalls: new Map(),
         attachedDocumentPath: record.attachedDocumentPath,
+        attachedContextPaths: record.attachedContextPaths,
         persistedId: record.id,
         isRestoring: true, // Mark as restoring to ignore replayed updates
         title: record.title,
@@ -812,6 +816,7 @@ export class SessionManagerImpl implements SessionManager {
       models: result.models,
       toolCalls: new Map(),
       attachedDocumentPath: record.attachedDocumentPath,
+      attachedContextPaths: record.attachedContextPaths,
       persistedId: record.id,
       title: record.title,
       cwd: resolvedCwd,
@@ -996,6 +1001,7 @@ export class SessionManagerImpl implements SessionManager {
       isLive,
       isPersisted: !!session.persistedId && !!persistence,
       attachedDocumentPath: session.attachedDocumentPath,
+      attachedContextPaths: session.attachedContextPaths,
     };
   }
 

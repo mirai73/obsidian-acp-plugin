@@ -110,6 +110,7 @@ export interface SessionSetModelParams {
 export interface Message {
 	role: 'user' | 'assistant' | 'system';
 	content: ContentBlock[];
+	usedContext?: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }>;
 }
 
 export interface ContentBlock {

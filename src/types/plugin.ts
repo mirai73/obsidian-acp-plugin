@@ -23,6 +23,7 @@ export interface PersistedContentBlock {
 export interface PersistedMessage {
   role: 'user' | 'assistant' | 'system';
   content: PersistedContentBlock[];
+  usedContext?: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }>;
 }
 
 /**
@@ -46,6 +47,8 @@ export interface PersistedSession {
   attachedDocumentPath?: string;
   /** Optional generated title for the session. */
   title?: string;
+  /** Optional additional vault paths (files or folders) added to the context. */
+  attachedContextPaths?: string[];
 }
 
 export interface PluginSettings {

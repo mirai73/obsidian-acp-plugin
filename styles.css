@@ -608,6 +608,133 @@ body {
 
 
 
+/* Additional vault context items (added via # trigger) */
+.acp-additional-context-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Row for context badges rendered outside/under the user message box */
+.acp-user-message-context-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-end;
+  margin-top: 2px;
+  margin-bottom: 6px;
+  max-width: 85%;
+}
+
+.acp-context-item-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(var(--color-accent-rgb), 0.1);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.25);
+  border-radius: 10px;
+  padding: 1px 4px 1px 6px;
+  line-height: 1.6;
+  cursor: default;
+  transition: background 0.15s ease;
+}
+
+.acp-context-item-badge:hover {
+  background: rgba(var(--color-accent-rgb), 0.18);
+}
+
+.acp-context-item-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--acp-primary-color);
+  opacity: 0.7;
+  width: 12px;
+  height: 12px;
+}
+
+.acp-context-item-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.acp-context-item-label {
+  font-size: var(--font-ui-smaller);
+  font-family: var(--acp-font-monospace);
+  color: var(--acp-primary-color);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acp-context-item-dismiss {
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none !important;
+  background: transparent !important;
+  color: var(--acp-text-faint);
+  cursor: pointer;
+  border-radius: 50% !important;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.acp-context-item-dismiss svg {
+  width: 10px;
+  height: 10px;
+}
+
+.acp-context-item-dismiss:hover {
+  color: var(--acp-error-color);
+}
+
+/* Vault dropdown (# trigger) — inherits most styles from .acp-dropdown */
+.acp-vault-dropdown {
+  left: 0;
+  right: auto;
+  min-width: 260px;
+  max-width: 380px;
+  transform-origin: bottom left;
+}
+
+.acp-vault-dropdown-item {
+  gap: 8px;
+}
+
+.acp-vault-dropdown-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--acp-text-muted);
+  width: 14px;
+  height: 14px;
+}
+
+.acp-vault-dropdown-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.acp-vault-dropdown-path {
+  margin-left: auto;
+  font-size: 0.75em;
+  color: var(--acp-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  font-family: var(--acp-font-monospace);
+}
+
 .acp-messages-container:focus-within {
   border-color: var(--acp-border-focus);
 }
@@ -726,6 +853,58 @@ body {
   max-width: 90%;
   border: none;
   border-bottom-left-radius: 4px;
+}
+
+/* Agent processing indicator on plain background (no box) */
+.acp-processing-indicator {
+  display: flex;
+  align-self: flex-start;
+  margin: 6px 0 10px 10px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  animation: acp-fade-in 0.15s ease-out;
+}
+
+.acp-wave-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+}
+
+.acp-wave-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #a855f7; /* Crisp vibrant purple */
+  width: 14px;
+  height: 14px;
+  animation: acp-purple-wave-opacity 1.2s infinite ease-in-out;
+}
+
+.acp-wave-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2px;
+  filter: none !important;
+}
+
+.acp-wave-icon:nth-child(1) { animation-delay: 0s; }
+.acp-wave-icon:nth-child(2) { animation-delay: 0.2s; }
+.acp-wave-icon:nth-child(3) { animation-delay: 0.4s; }
+.acp-wave-icon:nth-child(4) { animation-delay: 0.6s; }
+
+@keyframes acp-purple-wave-opacity {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 /* Streaming message styles */

@@ -13,6 +13,8 @@ import {
 	App,
 	Notice,
 	TFile,
+	TFolder,
+	TAbstractFile,
 } from 'obsidian';
 import {
 	Message,
@@ -113,6 +115,14 @@ export class ChatView extends ItemView implements ChatInterface {
 	// Selected text context
 	private selectedTextBadge: HTMLElement | null = null;
 	private selectedTextContext: { text: string; from: number; to: number } | null = null;
+
+	// Additional vault context items (added via # autocomplete)
+	private additionalContextItems: Array<{ path: string; name: string; type: 'file' | 'folder' }> = [];
+	private additionalContextContainer: HTMLElement | null = null;
+	private vaultDropdown: HTMLElement | null = null;
+	private filteredVaultItems: Array<{ path: string; name: string; type: 'file' | 'folder' }> = [];
+	private selectedVaultIndex: number = -1;
+	private activeHashQuery: string | null = null; // the current #query string being completed
 
 	private get commands() {
 		return [...this.defaultCommands, ...this.agentCommands];
@@ -361,6 +371,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.selectedTextBadge = contextRow.createDiv('acp-selection-badge');
 		this.selectedTextBadge.style.display = 'none';
 
+		// Additional vault context items container (badges added via # trigger)
+		this.additionalContextContainer = contextRow.createDiv('acp-additional-context-container');
+
 		// Input row with text area and enhanced send button
 		const inputRow = this.inputContainer.createDiv('acp-input-row');
 
@@ -416,6 +429,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		});
 		setIcon(this.sendButton, 'arrow-right');
 		this.createCommandDropdown(inputRow);
+		this.createVaultDropdown(inputRow);
 
 		this.updateModeSelector();
 		this.updateModelSelector();
@@ -441,6 +455,37 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Enter key to send (Shift+Enter for new line)
 		this.inputField.addEventListener('keydown', (event) => {
+			// Handle vault dropdown navigation (# trigger)
+			if (
+				this.vaultDropdown &&
+				this.vaultDropdown.style.display !== 'none'
+			) {
+				if (event.key === 'ArrowDown') {
+					event.preventDefault();
+					this.navigateVaultDropdown(1);
+					return;
+				} else if (event.key === 'ArrowUp') {
+					event.preventDefault();
+					this.navigateVaultDropdown(-1);
+					return;
+				} else if (event.key === 'Tab') {
+					if (this.filteredVaultItems.length > 0) {
+						event.preventDefault();
+						this.tabCompleteVaultItem();
+						return;
+					}
+				} else if (event.key === 'Enter') {
+					if (this.selectedVaultIndex >= 0 && this.filteredVaultItems.length > 0) {
+						event.preventDefault();
+						this.selectVaultItem(this.filteredVaultItems[this.selectedVaultIndex]);
+						return;
+					}
+				} else if (event.key === 'Escape') {
+					this.hideVaultDropdown();
+					return;
+				}
+			}
+
 			// Handle command dropdown navigation
 			if (
 				this.commandDropdown &&
@@ -480,7 +525,21 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.updateInputState();
 
 			const value = this.inputField.value;
-			const cursorPosition = this.inputField.selectionStart;
+			const cursorPosition = this.inputField.selectionStart ?? value.length;
+
+			// Check for # trigger: find a # preceded by a space or start of line,
+			// and followed by non-space characters up to cursor
+			const textUpToCursor = value.substring(0, cursorPosition);
+			const hashMatch = textUpToCursor.match(/(^|\s)#([^\s#]*)$/);
+			if (hashMatch) {
+				const query = hashMatch[2]; // text after #
+				this.activeHashQuery = hashMatch[0]; // full matched token (#query)
+				this.showVaultDropdown(query);
+				this.hideCommandDropdown();
+				return;
+			} else {
+				this.hideVaultDropdown();
+			}
 
 			// Check if we just typed a slash at the beginning
 			if (
@@ -527,6 +586,11 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.selectedTextContext = null;
 		this.updateSelectionBadge();
 
+		// Capture and clear additional context items
+		const contextItems = [...this.additionalContextItems];
+		this.additionalContextItems = [];
+		this.renderAdditionalContextBadges();
+
 		// Clear input
 		this.inputField.value = '';
 		this.autoResizeTextarea();
@@ -541,11 +605,18 @@ export class ChatView extends ItemView implements ChatInterface {
 			content: [...userMessageForUI.content],
 		};
 
+		const usedContext: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }> = [];
+
 		if (
 			this.isDocumentAddedToContext &&
 			this.sessionDocumentFile &&
 			this.getSessionMessages().length === 0
 		) {
+			usedContext.push({
+				label: this.sessionDocumentFile.name,
+				path: this.sessionDocumentFile.path,
+				type: 'document',
+			});
 			userMessageForAgent.content.unshift({
 				type: 'resource_link',
 				uri: `file//${this.sessionDocumentFile.path}`,
@@ -556,12 +627,39 @@ export class ChatView extends ItemView implements ChatInterface {
 			});
 		}
 
+		// Prepend additional vault context items as a text block
+		if (contextItems.length > 0) {
+			for (const item of contextItems) {
+				usedContext.push({
+					label: item.name,
+					path: item.path,
+					type: item.type,
+				});
+			}
+			const contextList = contextItems
+				.map((item) => `- ${item.type === 'folder' ? 'Folder' : 'File'}: ${item.path}`)
+				.join('\n');
+			userMessageForAgent.content.unshift({
+				type: 'text',
+				text: `Additional context from vault:\n${contextList}`,
+			});
+		}
+
 		// Prepend selected text as a text context block
 		if (selectionContext) {
+			usedContext.push({
+				label: `Selection (L${selectionContext.from}-${selectionContext.to})`,
+				type: 'selection',
+			});
 			userMessageForAgent.content.unshift({
 				type: 'text',
 				text: `Selected text (characters ${selectionContext.from}-${selectionContext.to}):\n\`\`\`\n${selectionContext.text}\n\`\`\``,
 			});
+		}
+
+		if (usedContext.length > 0) {
+			userMessageForUI.usedContext = usedContext;
+			userMessageForAgent.usedContext = usedContext;
 		}
 
 		if (this.isProcessing || this.messageQueue.length > 0) {
@@ -616,6 +714,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		try {
+			if (sessionId === this.currentSessionId) {
+				this.showProcessingIndicator();
+			}
 			await this.sessionManager!.sendPrompt(sessionId, [agentMessage]);
 			if (sessionId === this.currentSessionId) {
 				const session = this.sessionManager?.getSessionInfo(sessionId);
@@ -651,6 +752,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		} finally {
 			this.sessionProcessingStates.set(sessionId, false);
 			if (sessionId === this.currentSessionId) {
+				this.hideProcessingIndicator();
 				this.updateInputState();
 			}
 			this.dequeueAndDispatch(sessionId);
@@ -827,6 +929,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		) as HTMLElement;
 
 		if (!streamingContainer) {
+			this.hideProcessingIndicator();
 			// Create new streaming message container
 			streamingContainer = this.messagesContainer.createDiv(
 				'acp-message acp-message-assistant streaming-message'
@@ -855,6 +958,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Finalize streaming message (called when streaming is complete)
 	 */
 	private finalizeStreamingMessage(finalContentParam?: string): void {
+		this.hideProcessingIndicator();
 		const streamingContainer = this.messagesContainer?.querySelector(
 			'.streaming-message'
 		) as HTMLElement;
@@ -900,6 +1004,36 @@ export class ChatView extends ItemView implements ChatInterface {
 					new Notice('Failed to copy message');
 				}
 			});
+		}
+	}
+
+	/**
+	 * Show a wave indicator (4 pulsating purple icons) on a plain background while the agent is processing/thinking.
+	 */
+	private showProcessingIndicator(): void {
+		if (!this.messagesContainer) return;
+		if (this.messagesContainer.querySelector('.acp-processing-indicator')) return;
+
+		const indicatorEl = this.messagesContainer.createDiv('acp-processing-indicator');
+		const waveContainer = indicatorEl.createDiv('acp-wave-container');
+
+		const icons = ['book', 'wrench', 'globe', 'sparkles'];
+		for (const iconName of icons) {
+			const iconEl = waveContainer.createDiv('acp-wave-icon');
+			setIcon(iconEl, iconName);
+		}
+
+		this.scrollToBottom();
+	}
+
+	/**
+	 * Hide the processing wave indicator.
+	 */
+	private hideProcessingIndicator(): void {
+		if (!this.messagesContainer) return;
+		const indicatorEl = this.messagesContainer.querySelector('.acp-processing-indicator');
+		if (indicatorEl) {
+			indicatorEl.remove();
 		}
 	}
 
@@ -1047,6 +1181,29 @@ export class ChatView extends ItemView implements ChatInterface {
 			});
 		}
 
+		// Add context badges row OUTSIDE / UNDER the user message box
+		if (message.role === 'user' && message.usedContext && message.usedContext.length > 0) {
+			const contextRow = this.messagesContainer.createDiv('acp-user-message-context-row');
+			for (const ctx of message.usedContext) {
+				const badge = contextRow.createDiv('acp-selection-badge');
+				badge.style.display = 'inline-flex';
+
+				const badgeIcon = badge.createSpan('acp-context-badge-icon');
+				badgeIcon.style.display = 'inline-flex';
+				badgeIcon.style.alignItems = 'center';
+				badgeIcon.style.marginRight = '4px';
+
+				let iconName = 'file';
+				if (ctx.type === 'folder') iconName = 'folder';
+				else if (ctx.type === 'selection') iconName = 'code';
+				else if (ctx.type === 'document') iconName = 'file-text';
+				setIcon(badgeIcon, iconName);
+
+				const labelSpan = badge.createSpan({ cls: 'acp-selection-badge-label', text: ctx.label });
+				if (ctx.path) labelSpan.title = ctx.path;
+			}
+		}
+
 		// Scroll to bottom
 		this.scrollToBottom();
 	}
@@ -1055,6 +1212,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Display a new tool call in the chat
 	 */
 	private displayToolCall(chunk: any): void {
+		this.hideProcessingIndicator();
 		this.finalizeStreamingMessage();
 
 		// Create tool call container
@@ -1719,6 +1877,251 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
+	// ── Vault file/folder # trigger autocomplete ──────────────────────────────
+
+	private createVaultDropdown(container: HTMLElement): void {
+		this.vaultDropdown = container.createDiv('acp-dropdown acp-vault-dropdown');
+		this.vaultDropdown.style.display = 'none';
+
+		// Close dropdown when clicking outside
+		document.addEventListener('click', (e) => {
+			if (
+				this.vaultDropdown &&
+				!this.vaultDropdown.contains(e.target as Node)
+			) {
+				this.hideVaultDropdown();
+			}
+		});
+	}
+
+	private showVaultDropdown(query: string): void {
+		if (!this.vaultDropdown) return;
+
+		const lowerQuery = query.toLowerCase();
+		const allFiles = this.app.vault.getAllLoadedFiles();
+
+		// Build list of matching files and folders (skip root)
+		const items: Array<{ path: string; name: string; type: 'file' | 'folder'; score: number }> = [];
+		for (const file of allFiles) {
+			if (file.path === '/') continue;
+			const isFolder = file instanceof TFolder;
+			const name = file.name;
+			const lName = name.toLowerCase();
+			const lPath = file.path.toLowerCase();
+
+			if (lowerQuery === '' || lName.includes(lowerQuery) || lPath.includes(lowerQuery)) {
+				// Already added?
+				if (this.additionalContextItems.some((i) => i.path === file.path)) continue;
+				const nameMatch = lName.startsWith(lowerQuery) ? 2 : lName.includes(lowerQuery) ? 1 : 0;
+				const score = nameMatch;
+				items.push({ path: file.path, name, type: isFolder ? 'folder' : 'file', score });
+			}
+		}
+
+		// Sort: folders first then files, then by score desc, then name asc
+		items.sort((a, b) => {
+			if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+			if (b.score !== a.score) return b.score - a.score;
+			return a.name.localeCompare(b.name);
+		});
+
+		this.filteredVaultItems = items.slice(0, 20);
+
+		if (this.filteredVaultItems.length === 0) {
+			this.hideVaultDropdown();
+			return;
+		}
+
+		this.renderVaultList(this.filteredVaultItems);
+		this.vaultDropdown.style.display = 'block';
+		this.selectedVaultIndex = 0;
+		this.highlightVaultItem();
+	}
+
+	private hideVaultDropdown(): void {
+		if (this.vaultDropdown) {
+			this.vaultDropdown.style.display = 'none';
+			this.selectedVaultIndex = -1;
+		}
+	}
+
+	private renderVaultList(items: Array<{ path: string; name: string; type: 'file' | 'folder' }>): void {
+		if (!this.vaultDropdown) return;
+		this.vaultDropdown.empty();
+
+		items.forEach((item, index) => {
+			const el = this.vaultDropdown!.createDiv('acp-dropdown-item acp-vault-dropdown-item');
+
+			const iconEl = el.createSpan('acp-vault-dropdown-icon');
+			setIcon(iconEl, item.type === 'folder' ? 'folder' : 'file');
+
+			const textEl = el.createSpan('acp-dropdown-text');
+			textEl.textContent = item.name;
+
+			const pathEl = el.createSpan('acp-vault-dropdown-path');
+			pathEl.textContent = item.path;
+
+			el.addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.selectVaultItem(item);
+			});
+
+			el.addEventListener('mouseenter', () => {
+				this.selectedVaultIndex = index;
+				this.highlightVaultItem();
+			});
+		});
+	}
+
+	private highlightVaultItem(): void {
+		if (!this.vaultDropdown) return;
+		const items = this.vaultDropdown.querySelectorAll('.acp-vault-dropdown-item');
+		items.forEach((item, index) => {
+			if (index === this.selectedVaultIndex) {
+				item.addClass('is-selected');
+				item.scrollIntoView({ block: 'nearest' });
+			} else {
+				item.removeClass('is-selected');
+			}
+		});
+	}
+
+	private navigateVaultDropdown(direction: number): void {
+		if (!this.vaultDropdown || this.filteredVaultItems.length === 0) return;
+		this.selectedVaultIndex =
+			(this.selectedVaultIndex + direction + this.filteredVaultItems.length) %
+			this.filteredVaultItems.length;
+		this.highlightVaultItem();
+	}
+
+	private tabCompleteVaultItem(): void {
+		if (this.filteredVaultItems.length === 0) return;
+
+		const cursorPos = this.inputField.selectionStart ?? this.inputField.value.length;
+		const textUpToCursor = this.inputField.value.substring(0, cursorPos);
+		const hashMatch = textUpToCursor.match(/(^|\s)#([^\s#]*)$/);
+		if (!hashMatch) return;
+
+		const currentQuery = hashMatch[2];
+		const usePath = currentQuery.includes('/');
+		const candidateStrings = this.filteredVaultItems.map((item) =>
+			usePath ? item.path : item.name
+		);
+
+		const commonPrefix = this.getLongestCommonPrefix(candidateStrings);
+
+		let completedText = '';
+		if (commonPrefix.length > currentQuery.length) {
+			completedText = commonPrefix;
+		} else if (
+			this.selectedVaultIndex >= 0 &&
+			this.selectedVaultIndex < this.filteredVaultItems.length
+		) {
+			const selected = this.filteredVaultItems[this.selectedVaultIndex];
+			completedText = usePath ? selected.path : selected.name;
+		} else {
+			completedText = candidateStrings[0];
+		}
+
+		const prefixChar = hashMatch[1]; // whitespace or empty
+		const textBeforeToken = textUpToCursor.substring(
+			0,
+			textUpToCursor.length - hashMatch[0].length
+		);
+		const textAfterCursor = this.inputField.value.substring(cursorPos);
+
+		const newToken = `${prefixChar}#${completedText}`;
+		this.inputField.value = textBeforeToken + newToken + textAfterCursor;
+
+		const newCursorPos = textBeforeToken.length + newToken.length;
+		this.inputField.setSelectionRange(newCursorPos, newCursorPos);
+		this.activeHashQuery = newToken.trim();
+
+		// Re-trigger dropdown filtering with the new autocompleted query
+		this.showVaultDropdown(completedText);
+		this.autoResizeTextarea();
+	}
+
+	private getLongestCommonPrefix(strings: string[]): string {
+		if (strings.length === 0) return '';
+		let prefix = strings[0];
+		for (let i = 1; i < strings.length; i++) {
+			while (!strings[i].toLowerCase().startsWith(prefix.toLowerCase())) {
+				prefix = prefix.substring(0, prefix.length - 1);
+				if (prefix === '') return '';
+			}
+		}
+		return prefix;
+	}
+
+	private selectVaultItem(item: { path: string; name: string; type: 'file' | 'folder' }): void {
+		// Replace the active #query token in the textarea with nothing (token consumed)
+		if (this.activeHashQuery !== null) {
+			const cursorPos = this.inputField.selectionStart ?? this.inputField.value.length;
+			const textUpToCursor = this.inputField.value.substring(0, cursorPos);
+			const textAfterCursor = this.inputField.value.substring(cursorPos);
+
+			// Remove the #query token from the text
+			const newTextUpToCursor = textUpToCursor.replace(/(^|\s)#[^\s#]*$/, '$1');
+			this.inputField.value = newTextUpToCursor + textAfterCursor;
+			// Restore cursor position
+			const newCursorPos = newTextUpToCursor.length;
+			this.inputField.setSelectionRange(newCursorPos, newCursorPos);
+		}
+
+		// Add the item to additionalContextItems if not already there
+		if (!this.additionalContextItems.some((i) => i.path === item.path)) {
+			this.additionalContextItems.push(item);
+			this.persistAdditionalContextPaths();
+			this.renderAdditionalContextBadges();
+		}
+
+		this.hideVaultDropdown();
+		this.activeHashQuery = null;
+		this.inputField.focus();
+		this.autoResizeTextarea();
+	}
+
+	private persistAdditionalContextPaths(): void {
+		if (!this.sessionManager || !this.currentSessionId) return;
+		const session = this.sessionManager.getSessionInfo(this.currentSessionId);
+		if (session) {
+			session.attachedContextPaths = this.additionalContextItems.map((i) => i.path);
+		}
+	}
+
+	private renderAdditionalContextBadges(): void {
+		if (!this.additionalContextContainer) return;
+		this.additionalContextContainer.empty();
+
+		for (const item of this.additionalContextItems) {
+			const badge = this.additionalContextContainer.createDiv('acp-context-item-badge');
+
+			const iconEl = badge.createSpan('acp-context-item-icon');
+			setIcon(iconEl, item.type === 'folder' ? 'folder' : 'file');
+
+			const label = badge.createSpan({ cls: 'acp-context-item-label', text: item.name });
+			label.title = item.path;
+
+			const dismiss = badge.createEl('button', {
+				cls: 'acp-context-item-dismiss',
+				attr: { 'aria-label': `Remove ${item.name}` },
+			});
+			setIcon(dismiss, 'x');
+
+			dismiss.addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.additionalContextItems = this.additionalContextItems.filter(
+					(i) => i.path !== item.path
+				);
+				this.persistAdditionalContextPaths();
+				this.renderAdditionalContextBadges();
+			});
+		}
+	}
+
+	// ── End vault # trigger autocomplete ──────────────────────────────────────
+
 	private createCommandDropdown(container: HTMLElement): void {
 		this.commandDropdown = container.createDiv('acp-dropdown');
 		this.commandDropdown.style.display = 'none';
@@ -1975,6 +2378,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Reset document attachment state for the new session
 		this.isDocumentAddedToContext = false;
 		this.sessionDocumentFile = null;
+		// Reset additional vault context items
+		this.additionalContextItems = [];
+		this.renderAdditionalContextBadges();
 		this.updateDocumentContextBox();
 		await this.ensureSession();
 		this.scrollToBottom();
@@ -2111,6 +2517,15 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (this.sessionDocumentFile) {
 			this.app.workspace.openLinkText(this.sessionDocumentFile.path, '', false);
 		}
+
+		// Restore additional vault context items for this session
+		this.additionalContextItems = (session.attachedContextPaths ?? []).map((p) => {
+			const file = this.app.vault.getAbstractFileByPath(p);
+			const type = file instanceof TFolder ? 'folder' : 'file';
+			const name = file ? file.name : p.split('/').pop() ?? p;
+			return { path: p, name, type };
+		});
+		this.renderAdditionalContextBadges();
 
 		this.updateDocumentContextBox();
 		this.updateQueueIndicator();

@@ -34,6 +34,8 @@ export interface SessionSummary {
   isPersisted: boolean;
   /** Optional path of the document attached to this session. */
   attachedDocumentPath?: string;
+  /** Optional additional vault paths (files or folders) added to the context. */
+  attachedContextPaths?: string[];
 }
 
 export interface SessionManager {
