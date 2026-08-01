@@ -2159,6 +2159,7 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 			(s) =>
 				s.sessionId.toLowerCase().includes(q) ||
 				s.preview.toLowerCase().includes(q) ||
+				(s.title && s.title.toLowerCase().includes(q)) ||
 				s.agentId.toLowerCase().includes(q)
 		);
 	}
@@ -2166,8 +2167,9 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 	renderSuggestion(session: SessionSummary, el: HTMLElement) {
 		const container = el.createDiv('acp-session-suggestion');
 
-		// Row 1: preview text
-		container.createDiv({ text: session.preview, cls: 'acp-session-title' });
+		// Row 1: generated title or preview text
+		const titleText = session.title || session.preview;
+		container.createDiv({ text: titleText, cls: 'acp-session-title' });
 
 		const meta = container.createDiv('acp-session-meta');
 

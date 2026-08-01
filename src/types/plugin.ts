@@ -44,6 +44,8 @@ export interface PersistedSession {
   messages: PersistedMessage[];
   /** Optional path of the document attached to this session. */
   attachedDocumentPath?: string;
+  /** Optional generated title for the session. */
+  title?: string;
 }
 
 export interface PluginSettings {

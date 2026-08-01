@@ -26,6 +26,8 @@ export interface SessionSummary {
   messageCount: number;
   /** Preview text from the first user message. */
   preview: string;
+  /** Optional generated title for the session. */
+  title?: string;
   /** True when the session is live in memory and can accept new prompts. */
   isLive: boolean;
   /** True when the session has a persisted record on disk. */

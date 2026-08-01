@@ -87,6 +87,7 @@ export class SessionPersistenceService {
           : String(session.lastActivity),
       messages: this.serializeMessages(session),
       attachedDocumentPath: session.attachedDocumentPath,
+      title: session.title,
     };
 
     const sessions = this.plugin.settings.persistedSessions;

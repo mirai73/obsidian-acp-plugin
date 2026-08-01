@@ -222,6 +222,61 @@ describe('SessionManager', () => {
       expect(sessionInfo?.messages[1]).toEqual(mockResult.message);
     });
 
+    it('should generate a title asynchronously for a new session', async () => {
+      mockJsonRpcClient.sendRequest.mockImplementation((method, params) => {
+        if (method === 'session/prompt') {
+          if (params.sessionId === sessionId) {
+            return Promise.resolve({
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: 'Main Response' }],
+              },
+              stopReason: 'end_turn',
+            });
+          } else {
+            return Promise.resolve({
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: 'Generated Session Title' }],
+              },
+              stopReason: 'end_turn',
+            });
+          }
+        } else if (method === 'session/new') {
+          return Promise.resolve({
+            sessionId: 'temp-title-session-id',
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      await sessionManager.sendPrompt(sessionId, testMessages);
+
+      // Wait for background async task to resolve
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const sessionInfo = sessionManager.getSessionInfo(sessionId);
+      expect(sessionInfo?.title).toBe('Generated Session Title');
+
+      expect(mockJsonRpcClient.sendRequest).toHaveBeenCalledWith(
+        'session/prompt',
+        expect.objectContaining({
+          sessionId: 'temp-title-session-id',
+          prompt: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'text',
+              text: expect.stringContaining('Hello, how are you?'),
+            }),
+          ]),
+        })
+      );
+
+      expect(mockJsonRpcClient.sendNotification).toHaveBeenCalledWith(
+        'session/cancel',
+        { sessionId: 'temp-title-session-id' }
+      );
+    });
+
     it('should handle JSON-RPC client errors', async () => {
       mockJsonRpcClient.sendRequest.mockRejectedValue(
         new Error('Network error')

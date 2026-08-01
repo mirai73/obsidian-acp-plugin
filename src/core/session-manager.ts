@@ -53,6 +53,10 @@ export interface SessionContext {
   persistedId?: string;
   /** Whether the session is currently restoring/loading history from disk. */
   isRestoring?: boolean;
+  /** Optional generated title for the session. */
+  title?: string;
+  /** The session's working directory / vault path. */
+  cwd?: string;
 }
 
 /**
@@ -133,6 +137,7 @@ export class SessionManagerImpl implements SessionManager {
         modes: result.modes,
         models: result.models,
         toolCalls: new Map(),
+        cwd: cwd || process.cwd(),
       };
 
       // Store session using the agent's session ID
@@ -155,6 +160,7 @@ export class SessionManagerImpl implements SessionManager {
     messages: Message[]
   ): Promise<PromptResult> {
     const session = this.getSession(sessionId);
+    const isNewSession = !session.title && !session.messages.some((m) => m.role === 'user');
 
     if (!session.jsonRpcClient) {
       throw new JsonRpcError(
@@ -206,6 +212,15 @@ export class SessionManagerImpl implements SessionManager {
 
       // Persist session after turn completes
       await this.persistSession(session);
+
+      if (isNewSession) {
+        const firstUserMsg = session.messages.find((m) => m.role === 'user');
+        if (firstUserMsg) {
+          this.generateAndSetTitle(session, firstUserMsg).catch((err) => {
+            console.warn('Failed to generate title for session in background:', err);
+          });
+        }
+      }
 
       return result as PromptResult;
     } catch (error) {
@@ -638,6 +653,7 @@ export class SessionManagerImpl implements SessionManager {
             lastActivity: new Date(record.lastActivity),
             messageCount: record.messages.length,
             preview: this.previewFromPersistedMessages(record.messages),
+            title: record.title,
             isLive: false,
             isPersisted: true,
             attachedDocumentPath: record.attachedDocumentPath,
@@ -735,6 +751,8 @@ export class SessionManagerImpl implements SessionManager {
         attachedDocumentPath: record.attachedDocumentPath,
         persistedId: record.id,
         isRestoring: true, // Mark as restoring to ignore replayed updates
+        title: record.title,
+        cwd: resolvedCwd,
       };
       this.sessions.set(record.agentSessionId, sessionContext);
 
@@ -795,6 +813,8 @@ export class SessionManagerImpl implements SessionManager {
       toolCalls: new Map(),
       attachedDocumentPath: record.attachedDocumentPath,
       persistedId: record.id,
+      title: record.title,
+      cwd: resolvedCwd,
     };
 
     // Populate toolCalls map from the loaded messages
@@ -972,6 +992,7 @@ export class SessionManagerImpl implements SessionManager {
       lastActivity: session.lastActivity,
       messageCount: session.messages.length,
       preview: this.previewFromMessages(session.messages),
+      title: session.title,
       isLive,
       isPersisted: !!session.persistedId && !!persistence,
       attachedDocumentPath: session.attachedDocumentPath,
@@ -994,6 +1015,133 @@ export class SessionManagerImpl implements SessionManager {
     const text = textBlock?.text ?? 'Untitled';
     const clean = text.replace(/^Current document: .*\n\n/, '');
     return clean.length > 80 ? clean.substring(0, 80) + '…' : clean;
+  }
+
+  private async generateAndSetTitle(session: SessionContext, userMessage: Message): Promise<void> {
+    let initialRequest = '';
+    const contexts: string[] = [];
+
+    for (const block of userMessage.content) {
+      if (block.type === 'text' && block.text) {
+        if (block.text.startsWith('Selected text (')) {
+          contexts.push(block.text);
+        } else {
+          initialRequest = block.text;
+        }
+      } else if (block.type === 'resource_link') {
+        contexts.push(`Active document: ${block.name} (path: ${block.uri})`);
+        if (block.text) {
+          const cleanText = block.text.replace(/^Current document: .*\n\n/, '');
+          if (cleanText && !initialRequest) {
+            initialRequest = cleanText;
+          }
+        }
+      }
+    }
+
+    if (!initialRequest) {
+      initialRequest = 'Untitled conversation';
+    }
+
+    const contextStr = contexts.join('\n');
+
+    const title = await this.generateTitleForSession(session, initialRequest, contextStr);
+    console.log(`[ACP] Generated session title: "${title}"`);
+
+    session.title = title;
+    await this.persistSession(session);
+  }
+
+  private async generateTitleForSession(
+    session: SessionContext,
+    initialRequest: string,
+    contextInfo?: string
+  ): Promise<string> {
+    if (!session.jsonRpcClient) {
+      return 'Untitled';
+    }
+
+    try {
+      const newParams: SessionNewParams = {
+        cwd: session.cwd || process.cwd(),
+        mcpServers: [],
+      };
+      const newResult = await session.jsonRpcClient.sendRequest('session/new', newParams);
+      if (!newResult || !newResult.sessionId) {
+        return 'Untitled';
+      }
+      const tempSessionId = newResult.sessionId;
+
+      const tempSessionContext: SessionContext = {
+        sessionId: tempSessionId,
+        agentId: session.agentId,
+        jsonRpcClient: session.jsonRpcClient,
+        capabilities: [],
+        messages: [],
+        createdAt: new Date(),
+        lastActivity: new Date(),
+        status: 'active',
+        pendingOperations: new Set(),
+        toolCalls: new Map(),
+      };
+      this.sessions.set(tempSessionId, tempSessionContext);
+
+      try {
+        if (session.models?.currentModelId) {
+          try {
+            await session.jsonRpcClient.sendRequest('session/set_model', {
+              sessionId: tempSessionId,
+              modelId: session.models.currentModelId,
+            });
+          } catch (modelErr) {
+            console.warn('Failed to set model on temporary session:', modelErr);
+          }
+        }
+
+        let promptText = `Based on the following initial user request and context, generate a short, descriptive title (maximum 6 words) for this conversation. Do not include quotes, markdown formatting, or any extra text. Just return the title.\n\nUser Request: ${initialRequest}`;
+        if (contextInfo) {
+          promptText += `\n\nContext: ${contextInfo}`;
+        }
+
+        const promptParams: SessionPromptParams = {
+          sessionId: tempSessionId,
+          prompt: [{ type: 'text', text: promptText }],
+        };
+
+        const promptResult = await session.jsonRpcClient.sendRequest(
+          'session/prompt',
+          promptParams
+        );
+
+        let title = 'Untitled';
+        // 1. Try to get it from the accumulated messages (for streaming-only agents)
+        const lastMsg = tempSessionContext.messages[tempSessionContext.messages.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') {
+          const textBlock = lastMsg.content.find((b) => b.type === 'text');
+          if (textBlock && textBlock.text) {
+            title = textBlock.text.trim().replace(/^["']|["']$/g, '');
+          }
+        }
+        // 2. Fallback to direct promptResult (for non-streaming agents or mocks)
+        if (title === 'Untitled' && promptResult && promptResult.message && promptResult.message.content) {
+          const textBlock = promptResult.message.content.find((b: any) => b.type === 'text');
+          if (textBlock && textBlock.text) {
+            title = textBlock.text.trim().replace(/^["']|["']$/g, '');
+          }
+        }
+        return title;
+      } finally {
+        this.sessions.delete(tempSessionId);
+        try {
+          session.jsonRpcClient.sendNotification('session/cancel', { sessionId: tempSessionId });
+        } catch (cancelErr) {
+          console.warn('Failed to cancel temporary title-generation session:', cancelErr);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to generate session title via agent:', err);
+      return 'Untitled';
+    }
   }
 
   /**
