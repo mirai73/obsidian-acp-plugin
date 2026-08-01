@@ -259,6 +259,34 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  width: 100%;
+}
+
+.acp-session-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 2px 0;
+}
+
+.acp-session-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--background-secondary-alt);
+}
+
+.acp-session-content {
+  flex-grow: 1;
+  min-width: 0; /* Allow title truncation */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .acp-session-title {
@@ -272,6 +300,99 @@ body {
 .acp-session-meta {
   font-size: 0.8em;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.acp-session-separator {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.acp-session-badge-container {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.acp-session-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.acp-session-state-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* State Specific Colors */
+.acp-session-state-history {
+  color: var(--text-muted);
+}
+
+.acp-session-state-thinking {
+  color: var(--acp-info-color);
+  animation: acp-spin 1.5s linear infinite;
+}
+
+.acp-session-state-waiting-for-permission {
+  color: var(--acp-warning-color);
+  animation: acp-pulse 2.5s infinite ease-in-out;
+}
+
+.acp-session-state-waiting-for-input {
+  color: var(--acp-success-color);
+}
+
+/* Badges styling */
+.acp-session-badge {
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.acp-session-badge-persisted {
+  background: var(--background-secondary-alt);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.acp-session-badge-live {
+  background: color-mix(in srgb, var(--acp-success-color) 12%, transparent);
+  color: var(--acp-success-color);
+  border: 1px solid color-mix(in srgb, var(--acp-success-color) 25%, transparent);
+}
+
+.acp-session-badge-thinking {
+  background: color-mix(in srgb, var(--acp-info-color) 12%, transparent);
+  color: var(--acp-info-color);
+  border: 1px solid color-mix(in srgb, var(--acp-info-color) 25%, transparent);
+}
+
+.acp-session-badge-waiting-permission {
+  background: color-mix(in srgb, var(--acp-warning-color) 12%, transparent);
+  color: var(--acp-warning-color);
+  border: 1px solid color-mix(in srgb, var(--acp-warning-color) 25%, transparent);
+}
+
+/* Keyframes for animations */
+@keyframes acp-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes acp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.93); }
 }
 
 .acp-header-section {

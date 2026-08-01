@@ -43,6 +43,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	private statusIndicator: HTMLElement;
 	private connectionStatus: ConnectionStatus = { connected: false };
 	private sessionProcessingStates = new Map<string, boolean>();
+	private sessionsWaitingForPermission = new Map<string, Set<string>>();
 	private globalProcessingState = false;
 
 	private get isProcessing(): boolean {
@@ -60,6 +61,10 @@ export class ChatView extends ItemView implements ChatInterface {
 	private pendingPermissionResolvers = new Map<
 		string,
 		(id: string | null) => void
+	>();
+	private pendingPermissionParams = new Map<
+		string,
+		SessionRequestPermissionParams
 	>();
 	private acpClient: ACPClientImpl | null = null;
 	private sessionManager: SessionManagerImpl | null = null;
@@ -1208,125 +1213,171 @@ export class ChatView extends ItemView implements ChatInterface {
 	): Promise<string | null> {
 		return new Promise((resolve) => {
 			const toolCallId = params.toolCall.toolCallId;
+			const sessionId = params.sessionId;
+
+			if (!this.sessionsWaitingForPermission.has(sessionId)) {
+				this.sessionsWaitingForPermission.set(sessionId, new Set());
+			}
+			this.sessionsWaitingForPermission.get(sessionId)!.add(toolCallId);
+			this.pendingPermissionParams.set(toolCallId, params);
+
 			const wrappedResolve = (id: string | null) => {
 				this.pendingPermissionResolvers.delete(toolCallId);
+				this.pendingPermissionParams.delete(toolCallId);
+				const pending = this.sessionsWaitingForPermission.get(sessionId);
+				if (pending) {
+					pending.delete(toolCallId);
+					if (pending.size === 0) {
+						this.sessionsWaitingForPermission.delete(sessionId);
+					}
+				}
 				resolve(id);
 			};
 			this.pendingPermissionResolvers.set(toolCallId, wrappedResolve);
 
-			// Finalize any active streaming part so the permission request block
-			// is inserted in the correct chronological position within the flow.
-			this.finalizeStreamingMessage();
+			this.renderPermissionRequestUI(params, wrappedResolve);
+		});
+	}
 
-			const messageEl = this.messagesContainer.createDiv(
-				'acp-message acp-message-system acp-permission-request-compact'
-			);
+	private renderPermissionRequestUI(
+		params: SessionRequestPermissionParams,
+		wrappedResolve: (id: string | null) => void
+	): void {
+		// Finalize any active streaming part so the permission request block
+		// is inserted in the correct chronological position within the flow.
+		this.finalizeStreamingMessage();
 
-			const contentEl = messageEl.createDiv('acp-permission-content-compact');
+		const messageEl = this.messagesContainer.createDiv(
+			'acp-message acp-message-system acp-permission-request-compact'
+		);
 
-			// Icon
-			setIcon(
-				contentEl.createSpan({ cls: 'acp-permission-icon' }),
-				'alert-triangle'
-			);
+		const contentEl = messageEl.createDiv('acp-permission-content-compact');
 
-			// Fetch full tool call context from session manager if available
-			let fullToolCall = undefined;
-			if (this.sessionManager) {
-				const session = this.sessionManager.getSessionInfo(params.sessionId);
-				if (session && session.toolCalls) {
-					fullToolCall = session.toolCalls.get(params.toolCall.toolCallId);
+		// Icon
+		setIcon(
+			contentEl.createSpan({ cls: 'acp-permission-icon' }),
+			'alert-triangle'
+		);
+
+		// Fetch full tool call context from session manager if available
+		let fullToolCall = undefined;
+		if (this.sessionManager) {
+			const session = this.sessionManager.getSessionInfo(params.sessionId);
+			if (session && session.toolCalls) {
+				fullToolCall = session.toolCalls.get(params.toolCall.toolCallId);
+			}
+		}
+
+		// Action description (Summary)
+		const kind = fullToolCall?.kind || params.toolCall.kind || 'access';
+		const resource =
+			(fullToolCall?.locations && fullToolCall.locations.length > 0
+				? fullToolCall.locations[0].path
+				: null) ||
+			params.toolCall.path ||
+			params.toolCall.resource ||
+			'unknown';
+		const title =
+			fullToolCall?.title || params.toolCall.title || 'Permission Request';
+
+		const summaryText = title; // `${kind}: ${resource}`;
+		const summaryEl = contentEl.createSpan({
+			text: summaryText,
+			cls: 'acp-permission-summary',
+		});
+
+		if (title) {
+			summaryEl.title = title; // Show title as tooltip
+		}
+
+		const optionsContainer = messageEl.createDiv(
+			'acp-permission-options-compact'
+		);
+		optionsContainer.style.marginTop = '4px';
+
+		params.options.forEach((option) => {
+			const btn = optionsContainer.createEl('button', {
+				text: option.name,
+				cls: `acp-permission-button-compact ${option.kind.startsWith('allow') ? 'mod-cta' : ''}`,
+			});
+
+			btn.addEventListener('click', () => {
+				// Remove the permission request element entirely
+				messageEl.remove();
+
+				// Add a small indicator of what was selected to the tool call element
+				const toolCallEl = this.messagesContainer.querySelector(
+					`#tool-call-${params.toolCall.toolCallId}`
+				);
+				if (toolCallEl) {
+					const toolCallContent = toolCallEl.querySelector(
+						'.acp-permission-content-compact'
+					);
+					if (toolCallContent) {
+						const selectionIndicator = toolCallContent.createSpan({
+							cls: 'acp-permission-selection-compact',
+						});
+						selectionIndicator.textContent = `(${option.name})`;
+					}
+				}
+
+				wrappedResolve(option.optionId);
+			});
+		});
+
+		// Add a cancel button if not already in options
+		const hasCancel = params.options.some((o) => o.kind.startsWith('reject'));
+		if (!hasCancel) {
+			const cancelBtn = optionsContainer.createEl('button', {
+				text: 'Cancel',
+				cls: 'acp-permission-button-compact',
+			});
+			cancelBtn.addEventListener('click', () => {
+				// Remove the permission request element entirely
+				messageEl.remove();
+
+				const toolCallEl = this.messagesContainer.querySelector(
+					`#tool-call-${params.toolCall.toolCallId}`
+				);
+				if (toolCallEl) {
+					const toolCallContent = toolCallEl.querySelector(
+						'.acp-permission-content-compact'
+					);
+					if (toolCallContent) {
+						const selectionIndicator = toolCallContent.createSpan({
+							cls: 'acp-permission-selection-compact',
+						});
+						selectionIndicator.textContent = `(Cancelled)`;
+					}
+				}
+				wrappedResolve(null);
+			});
+		}
+
+		this.scrollToBottom();
+	}
+
+	private getLiveSessionId(id: string): string {
+		if (this.sessionManager) {
+			const activeSessions = this.sessionManager.getActiveSessions();
+			for (const session of activeSessions) {
+				if (session.sessionId === id || session.persistedId === id) {
+					return session.sessionId;
 				}
 			}
+		}
+		return id;
+	}
 
-			// Action description (Summary)
-			const kind = fullToolCall?.kind || params.toolCall.kind || 'access';
-			const resource =
-				(fullToolCall?.locations && fullToolCall.locations.length > 0
-					? fullToolCall.locations[0].path
-					: null) ||
-				params.toolCall.path ||
-				params.toolCall.resource ||
-				'unknown';
-			const title =
-				fullToolCall?.title || params.toolCall.title || 'Permission Request';
+	isSessionWaitingForPermission(sessionId: string): boolean {
+		const liveId = this.getLiveSessionId(sessionId);
+		const pending = this.sessionsWaitingForPermission.get(liveId);
+		return pending !== undefined && pending.size > 0;
+	}
 
-			const summaryText = title; // `${kind}: ${resource}`;
-			const summaryEl = contentEl.createSpan({
-				text: summaryText,
-				cls: 'acp-permission-summary',
-			});
-
-			if (title) {
-				summaryEl.title = title; // Show title as tooltip
-			}
-
-			const optionsContainer = messageEl.createDiv(
-				'acp-permission-options-compact'
-			);
-			optionsContainer.style.marginTop = '4px';
-
-			params.options.forEach((option) => {
-				const btn = optionsContainer.createEl('button', {
-					text: option.name,
-					cls: `acp-permission-button-compact ${option.kind.startsWith('allow') ? 'mod-cta' : ''}`,
-				});
-
-				btn.addEventListener('click', () => {
-					// Remove the permission request element entirely
-					messageEl.remove();
-
-					// Add a small indicator of what was selected to the tool call element
-					const toolCallEl = this.messagesContainer.querySelector(
-						`#tool-call-${params.toolCall.toolCallId}`
-					);
-					if (toolCallEl) {
-						const toolCallContent = toolCallEl.querySelector(
-							'.acp-permission-content-compact'
-						);
-						if (toolCallContent) {
-							const selectionIndicator = toolCallContent.createSpan({
-								cls: 'acp-permission-selection-compact',
-							});
-							selectionIndicator.textContent = `(${option.name})`;
-						}
-					}
-
-					wrappedResolve(option.optionId);
-				});
-			});
-
-			// Add a cancel button if not already in options
-			const hasCancel = params.options.some((o) => o.kind.startsWith('reject'));
-			if (!hasCancel) {
-				const cancelBtn = optionsContainer.createEl('button', {
-					text: 'Cancel',
-					cls: 'acp-permission-button-compact',
-				});
-				cancelBtn.addEventListener('click', () => {
-					// Remove the permission request element entirely
-					messageEl.remove();
-
-					const toolCallEl = this.messagesContainer.querySelector(
-						`#tool-call-${params.toolCall.toolCallId}`
-					);
-					if (toolCallEl) {
-						const toolCallContent = toolCallEl.querySelector(
-							'.acp-permission-content-compact'
-						);
-						if (toolCallContent) {
-							const selectionIndicator = toolCallContent.createSpan({
-								cls: 'acp-permission-selection-compact',
-							});
-							selectionIndicator.textContent = `(Cancelled)`;
-						}
-					}
-					wrappedResolve(null);
-				});
-			}
-
-			this.scrollToBottom();
-		});
+	isSessionProcessing(sessionId: string): boolean {
+		const liveId = this.getLiveSessionId(sessionId);
+		return this.sessionProcessingStates.get(liveId) === true;
 	}
 
 	private renderMarkdownContent(content: string, container: HTMLElement): void {
@@ -1945,7 +1996,8 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.app,
 			sessions,
 			this.acpClient,
-			(sessionId) => this.loadSession(sessionId)
+			(sessionId) => this.loadSession(sessionId),
+			this
 		);
 		modal.open();
 	}
@@ -2021,6 +2073,16 @@ export class ChatView extends ItemView implements ChatInterface {
 			const displayMsg = this.cleanMessageForDisplay(msg);
 			this.displayMessage(displayMsg);
 		});
+
+		// Re-render any pending permission requests for this session
+		for (const [toolCallId, params] of this.pendingPermissionParams.entries()) {
+			if (params.sessionId === liveSessionId) {
+				const wrappedResolve = this.pendingPermissionResolvers.get(toolCallId);
+				if (wrappedResolve) {
+					this.renderPermissionRequestUI(params, wrappedResolve);
+				}
+			}
+		}
 
 		// Update modes
 		if (session.modes) {
@@ -2139,17 +2201,20 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 	private sessions: SessionSummary[];
 	private onSelect: (sessionId: string) => void;
 	private acpClient: ACPClientImpl | null;
+	private chatView: ChatView;
 
 	constructor(
 		app: App,
 		sessions: SessionSummary[],
 		acpClient: ACPClientImpl | null,
-		onSelect: (sessionId: string) => void
+		onSelect: (sessionId: string) => void,
+		chatView: ChatView
 	) {
 		super(app);
 		this.sessions = sessions.filter((s) => s.messageCount > 0);
 		this.acpClient = acpClient;
 		this.onSelect = onSelect;
+		this.chatView = chatView;
 		this.setPlaceholder('Search past conversations…');
 	}
 
@@ -2167,11 +2232,40 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 	renderSuggestion(session: SessionSummary, el: HTMLElement) {
 		const container = el.createDiv('acp-session-suggestion');
 
-		// Row 1: generated title or preview text
-		const titleText = session.title || session.preview;
-		container.createDiv({ text: titleText, cls: 'acp-session-title' });
+		// New row layout
+		const row = container.createDiv('acp-session-row');
 
-		const meta = container.createDiv('acp-session-meta');
+		// Determine the session state
+		let state: 'history' | 'thinking' | 'waiting-for-permission' | 'waiting-for-input' = 'history';
+		if (session.isLive) {
+			const isWaitingPerm = this.chatView.isSessionWaitingForPermission(session.sessionId);
+			const isProcessing = this.chatView.isSessionProcessing(session.sessionId);
+			if (isWaitingPerm) {
+				state = 'waiting-for-permission';
+			} else if (isProcessing) {
+				state = 'thinking';
+			} else {
+				state = 'waiting-for-input';
+			}
+		}
+
+		// Left Column: Icon container
+		const iconContainer = row.createDiv('acp-session-icon-container');
+		const stateIconSpan = iconContainer.createSpan({
+			cls: `acp-session-state-icon acp-session-state-${state}`,
+		});
+		let iconName = 'history';
+		if (state === 'thinking') iconName = 'loader';
+		else if (state === 'waiting-for-permission') iconName = 'alert-triangle';
+		else if (state === 'waiting-for-input') iconName = 'message-square';
+		setIcon(stateIconSpan, iconName);
+
+		// Middle Column: Content container (Title + Meta)
+		const contentContainer = row.createDiv('acp-session-content');
+		const titleText = session.title || session.preview;
+		contentContainer.createDiv({ text: titleText, cls: 'acp-session-title' });
+
+		const meta = contentContainer.createDiv('acp-session-meta');
 
 		// Agent name
 		let agentName = session.agentId;
@@ -2179,20 +2273,38 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 			const status = this.acpClient.getAllConnectionStatuses().get(session.agentId);
 			if (status?.agentName) agentName = status.agentName;
 		}
-		meta.createSpan({ text: `Agent: ${agentName}`, cls: 'acp-session-agent' });
+
+		// Clean bullet list of metadata
+		meta.createSpan({ text: agentName, cls: 'acp-session-agent' });
+		meta.createSpan({ text: ' • ', cls: 'acp-session-separator' });
 		meta.createSpan({
-			text: ` | ${session.lastActivity.toLocaleString()}`,
+			text: session.lastActivity.toLocaleString(),
 			cls: 'acp-session-time',
 		});
+		meta.createSpan({ text: ' • ', cls: 'acp-session-separator' });
 		meta.createSpan({
-			text: ` | ${session.messageCount} messages`,
-			cls: 'acp-session-id',
+			text: `${session.messageCount} message${session.messageCount === 1 ? '' : 's'}`,
+			cls: 'acp-session-messages',
 		});
 
-		// Live / persisted badge
-		const badge = meta.createSpan({
-			cls: `acp-session-badge ${session.isLive ? 'acp-session-badge-live' : 'acp-session-badge-persisted'}`,
-			text: session.isLive ? '● live' : '○ history',
+		// Right Column: Badge container
+		const badgeContainer = row.createDiv('acp-session-badge-container');
+		let badgeText = 'history';
+		let badgeClass = 'acp-session-badge-persisted';
+		if (state === 'thinking') {
+			badgeText = 'thinking';
+			badgeClass = 'acp-session-badge-thinking';
+		} else if (state === 'waiting-for-permission') {
+			badgeText = 'action needed';
+			badgeClass = 'acp-session-badge-waiting-permission';
+		} else if (state === 'waiting-for-input') {
+			badgeText = 'live';
+			badgeClass = 'acp-session-badge-live';
+		}
+
+		badgeContainer.createSpan({
+			cls: `acp-session-badge ${badgeClass}`,
+			text: badgeText,
 		});
 	}
 
