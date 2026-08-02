@@ -122,7 +122,7 @@ export default class ACPChatPlugin extends Plugin {
     // Register chat view
     try {
       this.registerView(CHAT_VIEW_TYPE, (leaf) => {
-        this.chatView = new ChatView(leaf);
+        this.chatView = new ChatView(leaf, this);
         // Connect the chat view to the ACP client
         this.chatView.setACPClient(this.acpClient, this.sessionPersistence);
         return this.chatView;

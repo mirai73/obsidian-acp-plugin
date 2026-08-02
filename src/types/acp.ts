@@ -111,6 +111,7 @@ export interface Message {
 	role: 'user' | 'assistant' | 'system';
 	content: ContentBlock[];
 	usedContext?: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }>;
+	timestamp?: number | string | Date;
 }
 
 export interface ContentBlock {

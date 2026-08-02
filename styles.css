@@ -1783,7 +1783,8 @@ body {
 	padding-top: 0.75rem;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.checkbox-container {
+.acp-settings-container .checkbox-container,
+.acp-permission-dialog .checkbox-container {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
@@ -1793,7 +1794,8 @@ body {
 	user-select: none;
 	white-space: nowrap;
 }
-.checkbox-container input[type="checkbox"] {
+.acp-settings-container .checkbox-container input[type="checkbox"],
+.acp-permission-dialog .checkbox-container input[type="checkbox"] {
 	margin: 0;
 	cursor: pointer;
 }
@@ -1846,20 +1848,20 @@ body {
 	padding-top: 1rem;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.setting-item {
+.acp-settings-container .setting-item {
 	margin-bottom: 1rem;
 }
-.setting-item-name {
+.acp-settings-container .setting-item-name {
 	font-weight: 500;
 	margin-bottom: 0.25rem;
 }
-.setting-item-description {
+.acp-settings-container .setting-item-description {
 	font-size: 0.9rem;
 	color: var(--text-muted);
 	margin-bottom: 0.5rem;
 }
-.setting-item input[type="text"],
-.setting-item textarea {
+.acp-settings-container .setting-item input[type="text"],
+.acp-settings-container .setting-item textarea {
 	width: 100%;
 	padding: 0.5rem;
 	border: 1px solid var(--background-modifier-border);
@@ -1868,7 +1870,7 @@ body {
 	color: var(--text-normal);
 	font-family: var(--font-interface);
 }
-.setting-item textarea {
+.acp-settings-container .setting-item textarea {
 	resize: vertical;
 	min-height: 80px;
 }

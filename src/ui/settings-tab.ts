@@ -19,10 +19,330 @@ export class ACPChatSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  getControlValue(key: string): any {
+    const parts = key.split('.');
+    let val: any = this.plugin.settings;
+    for (const part of parts) {
+      if (val === undefined || val === null) return undefined;
+      val = val[part];
+    }
+    return val;
+  }
+
+  async setControlValue(key: string, value: any): Promise<void> {
+    const parts = key.split('.');
+    let obj: any = this.plugin.settings;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (!obj[part] || typeof obj[part] !== 'object') {
+        obj[part] = {};
+      }
+      obj = obj[part];
+    }
+    obj[parts[parts.length - 1]] = value;
+    await this.plugin.saveSettings();
+
+    if (key === 'ui.showFileOperationNotifications') {
+      if (this.plugin.fileOperationsHandler) {
+        this.plugin.fileOperationsHandler.setShowNotifications(Boolean(value));
+      }
+    } else if (key === 'ui.showTimestamps' || key === 'ui.enableMarkdown') {
+      const leaves = this.app.workspace.getLeavesOfType('acp-chat-view');
+      leaves.forEach((leaf) => {
+        if (leaf.view && typeof (leaf.view as any).refreshCurrentSessionMessages === 'function') {
+          (leaf.view as any).refreshCurrentSessionMessages();
+        }
+      });
+    }
+  }
+
+  getSettingDefinitions(): any[] {
+    const agentsOptions: Record<string, string> = { '': '— None —' };
+    this.plugin.settings.agents.forEach((a) => {
+      agentsOptions[a.id] = a.name;
+    });
+
+    const sessionCount = this.plugin.settings.persistedSessions?.length ?? 0;
+
+    return [
+      // Agent Configuration Section
+      {
+        heading: 'Agent Configuration',
+      },
+      {
+        name: 'Add New Agent',
+        desc: 'Add a new AI assistant configuration',
+        render: (setting: Setting) => {
+          setting.addButton((button) =>
+            button
+              .setButtonText('Add Agent')
+              .setCta()
+              .onClick(() => {
+                this.showAddAgentModal();
+              })
+          );
+        },
+      },
+      {
+        render: (setting: Setting) => {
+          setting.settingEl.addClass('acp-configured-agents-row');
+          setting.settingEl.style.display = 'block';
+          setting.infoEl.style.display = 'none';
+          setting.controlEl.style.display = 'block';
+          setting.controlEl.style.width = '100%';
+          setting.controlEl.empty();
+          this.refreshAgentList(setting.controlEl);
+        },
+      },
+      {
+        name: 'Default Agent',
+        desc: 'The agent used by default when sending messages',
+        control: {
+          type: 'dropdown',
+          key: 'defaultAgentId',
+          options: agentsOptions,
+        },
+      },
+
+      // Permissions Section
+      {
+        heading: 'Permissions',
+      },
+      {
+        name: 'Require Permission Confirmation',
+        desc: 'Require user confirmation for file operations',
+        control: {
+          type: 'toggle',
+          key: 'permissions.requireConfirmation',
+        },
+      },
+      {
+        name: 'Show Permission Dialog',
+        desc: 'Show detailed permission dialog with operation details',
+        control: {
+          type: 'toggle',
+          key: 'permissions.showPermissionDialog',
+        },
+      },
+      {
+        name: 'Log Operations',
+        desc: 'Log all file operations performed by AI assistants',
+        control: {
+          type: 'toggle',
+          key: 'permissions.logOperations',
+        },
+      },
+      {
+        name: 'Allowed Paths',
+        desc: 'Paths that AI assistants can access (leave empty to allow all vault files)',
+        render: (setting: Setting) => {
+          setting.addTextArea((text) => {
+            text.setValue(
+              this.plugin.settings.permissions?.allowedPaths?.join('\n') || ''
+            );
+            text.setPlaceholder(
+              'Enter one path per line\nExample:\nfolder/\n*.md\nspecific-file.txt'
+            );
+            text.onChange(async (value) => {
+              if (!this.plugin.settings.permissions) {
+                this.plugin.settings.permissions = DEFAULT_SETTINGS.permissions!;
+              }
+              this.plugin.settings.permissions.allowedPaths = value
+                .split('\n')
+                .map((path) => path.trim())
+                .filter((path) => path.length > 0);
+              await this.plugin.saveSettings();
+            });
+          });
+        },
+      },
+      {
+        name: 'Read-Only Paths',
+        desc: 'Paths that AI assistants can read but not modify',
+        render: (setting: Setting) => {
+          setting.addTextArea((text) => {
+            text.setValue(
+              this.plugin.settings.permissions?.readOnlyPaths?.join('\n') || ''
+            );
+            text.setPlaceholder(
+              'Enter one path per line\nExample:\ntemplates/\nreference/\n*.template'
+            );
+            text.onChange(async (value) => {
+              if (!this.plugin.settings.permissions) {
+                this.plugin.settings.permissions = DEFAULT_SETTINGS.permissions!;
+              }
+              this.plugin.settings.permissions.readOnlyPaths = value
+                .split('\n')
+                .map((path) => path.trim())
+                .filter((path) => path.length > 0);
+              await this.plugin.saveSettings();
+            });
+          });
+        },
+      },
+      {
+        name: 'Denied Paths',
+        desc: 'Paths that AI assistants cannot access at all',
+        render: (setting: Setting) => {
+          setting.addTextArea((text) => {
+            text.setValue(
+              this.plugin.settings.permissions?.deniedPaths?.join('\n') || ''
+            );
+            text.setPlaceholder(
+              'Enter one path per line\nExample:\nprivate/\nsecrets.md\n*.key'
+            );
+            text.onChange(async (value) => {
+              if (!this.plugin.settings.permissions) {
+                this.plugin.settings.permissions = DEFAULT_SETTINGS.permissions!;
+              }
+              this.plugin.settings.permissions.deniedPaths = value
+                .split('\n')
+                .map((path) => path.trim())
+                .filter((path) => path.length > 0);
+              await this.plugin.saveSettings();
+            });
+          });
+        },
+      },
+
+      // Connection Management Section
+      {
+        heading: 'Connection Management',
+      },
+      {
+        name: 'Auto Reconnect',
+        desc: 'Automatically attempt to reconnect when connection is lost',
+        control: {
+          type: 'toggle',
+          key: 'connection.autoReconnect',
+        },
+      },
+      {
+        name: 'Reconnect Interval',
+        desc: 'Time between reconnection attempts (seconds)',
+        control: {
+          type: 'slider',
+          key: 'connection.reconnectInterval',
+          min: 5,
+          max: 300,
+          step: 5,
+        },
+      },
+      {
+        name: 'Max Reconnect Attempts',
+        desc: 'Maximum number of reconnection attempts before giving up',
+        control: {
+          type: 'slider',
+          key: 'connection.maxReconnectAttempts',
+          min: 1,
+          max: 10,
+          step: 1,
+        },
+      },
+      {
+        name: 'Connection Timeout',
+        desc: 'Timeout for initial connection attempts (seconds)',
+        control: {
+          type: 'slider',
+          key: 'connection.connectionTimeout',
+          min: 5,
+          max: 60,
+          step: 5,
+        },
+      },
+
+      // UI Configuration Section
+      {
+        heading: 'UI Configuration',
+      },
+      {
+        name: 'Show Timestamps',
+        desc: 'Show timestamps in chat messages',
+        control: {
+          type: 'toggle',
+          key: 'ui.showTimestamps',
+        },
+      },
+      {
+        name: 'Enable Markdown',
+        desc: 'Enable markdown rendering in assistant responses',
+        control: {
+          type: 'toggle',
+          key: 'ui.enableMarkdown',
+        },
+      },
+      {
+        name: 'Show File Operation Notifications',
+        desc: 'Show notifications when AI assistants modify files',
+        control: {
+          type: 'toggle',
+          key: 'ui.showFileOperationNotifications',
+        },
+      },
+
+      // Session History Section
+      {
+        heading: 'Session History',
+      },
+      {
+        name: 'Save session history',
+        desc: 'Persist chat conversations to disk so they can be recalled after restarting Obsidian',
+        control: {
+          type: 'toggle',
+          key: 'sessions.enabled',
+        },
+      },
+      {
+        name: 'Auto-delete old sessions',
+        desc: 'Automatically remove sessions older than the configured number of days',
+        control: {
+          type: 'toggle',
+          key: 'sessions.autoCleanup',
+        },
+      },
+      {
+        name: 'Delete sessions older than',
+        desc: 'Sessions with no activity beyond this threshold are removed on startup',
+        control: {
+          type: 'slider',
+          key: 'sessions.cleanupAfterDays',
+          min: 1,
+          max: 365,
+          step: 1,
+        },
+      },
+      {
+        name: `Stored sessions: ${sessionCount}`,
+        desc: 'Permanently delete all saved conversation history',
+        action: {
+          label: 'Delete all sessions',
+          warning: true,
+          onClick: async () => {
+            if (
+              confirm(
+                `Delete all ${sessionCount} saved session${sessionCount !== 1 ? 's' : ''}? This cannot be undone.`
+              )
+            ) {
+              this.plugin.settings.persistedSessions = [];
+              await this.plugin.saveSettings();
+              new Notice('All session history deleted');
+              if (typeof (this as any).update === 'function') {
+                (this as any).update();
+              } else {
+                this.display();
+              }
+            }
+          },
+        },
+      },
+    ];
+  }
+
   display(): void {
     const { containerEl } = this;
 
     containerEl.empty();
+    containerEl.addClass('acp-settings-container');
 
     // Agent Configuration Section
     this.displayAgentConfiguration(containerEl);
@@ -113,27 +433,16 @@ export class ACPChatSettingTab extends PluginSettingTab {
       const isConnected = connectionStatus?.connected;
 
       const descFragment = document.createDocumentFragment();
-
       if (agent.workingDirectory) {
-        descFragment.appendChild(document.createElement('br'));
-        descFragment.appendText(`Working Directory: ${agent.workingDirectory}`);
+        descFragment.appendText(agent.workingDirectory);
       }
-      descFragment.appendChild(document.createElement('br'));
-
-      const statusSpan = document.createElement('span');
-      statusSpan.style.fontWeight = 'bold';
-      statusSpan.style.color = isConnected
-        ? 'var(--color-green)'
-        : 'var(--text-muted)';
-      statusSpan.textContent = isConnected ? 'CONNECTED' : 'DISCONNECTED';
-      descFragment.appendChild(statusSpan);
 
       const setting = new Setting(container)
         .setName(agent.name)
         .setDesc(descFragment);
 
-      // Align items to top so buttons are on the same row as the name
-      setting.settingEl.style.alignItems = 'flex-start';
+      setting.settingEl.style.alignItems = 'center';
+      setting.settingEl.style.padding = '6px 0';
 
       // Enable/Disable toggle
       setting.addToggle((toggle) => {
@@ -153,8 +462,13 @@ export class ACPChatSettingTab extends PluginSettingTab {
         button
           .setButtonText(isConnected ? 'Disconnect' : 'Connect')
           .setTooltip(
-            isConnected ? 'Disconnect from agent' : 'Connect to agent'
+            !agent.enabled
+              ? 'Enable agent to connect'
+              : isConnected
+              ? 'Disconnect from agent'
+              : 'Connect to agent'
           )
+          .setDisabled(!agent.enabled)
           .onClick(async () => {
             button.setDisabled(true);
             try {
@@ -170,7 +484,7 @@ export class ACPChatSettingTab extends PluginSettingTab {
             }
           });
 
-        if (!isConnected) {
+        if (!isConnected && agent.enabled) {
           button.setCta();
         }
       });

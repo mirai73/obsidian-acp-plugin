@@ -128,8 +128,42 @@ export class ChatView extends ItemView implements ChatInterface {
 		return [...this.defaultCommands, ...this.agentCommands];
 	}
 
-	constructor(leaf: WorkspaceLeaf) {
+	private plugin: any = null;
+
+	constructor(leaf: WorkspaceLeaf, plugin?: any) {
 		super(leaf);
+		if (plugin) {
+			this.plugin = plugin;
+		}
+	}
+
+	private getSettings(): any {
+		if (this.plugin?.settings) {
+			return this.plugin.settings;
+		}
+		const plugins = (this.app as any).plugins;
+		const pluginList = Object.values(plugins?.plugins || {}) as any[];
+		return (
+			plugins?.plugins?.['acp-chat-assistant']?.settings ||
+			plugins?.getPlugin?.('acp-chat-assistant')?.settings ||
+			pluginList.find((p: any) => p?.settings?.ui !== undefined)?.settings
+		);
+	}
+
+	/**
+	 * Re-render all messages in the active session when UI rendering settings change.
+	 */
+	refreshCurrentSessionMessages(): void {
+		if (!this.sessionManager || !this.currentSessionId) return;
+
+		const session = this.sessionManager.getSessionInfo(this.currentSessionId);
+		if (!session) return;
+
+		this.messagesContainer.empty();
+		session.messages.forEach((msg: Message) => {
+			const displayMsg = this.cleanMessageForDisplay(msg);
+			this.displayMessage(displayMsg);
+		});
 	}
 
 	getViewType(): string {
@@ -595,14 +629,17 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.inputField.value = '';
 		this.autoResizeTextarea();
 
+		const now = Date.now();
 		const userMessageForUI: Message = {
 			role: 'user',
 			content: [{ type: 'text', text: text }],
+			timestamp: now,
 		};
 
 		const userMessageForAgent: Message = {
 			...userMessageForUI,
 			content: [...userMessageForUI.content],
+			timestamp: now,
 		};
 
 		const usedContext: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }> = [];
@@ -935,6 +972,12 @@ export class ChatView extends ItemView implements ChatInterface {
 				'acp-message acp-message-assistant streaming-message'
 			);
 
+			const settings = this.getSettings();
+			if (settings?.ui?.showTimestamps === true) {
+				const timestamp = streamingContainer.createDiv('acp-message-timestamp');
+				timestamp.textContent = new Date().toLocaleTimeString();
+			}
+
 			const messageContent = streamingContainer.createDiv(
 				'acp-message-content message-content'
 			);
@@ -967,7 +1010,7 @@ export class ChatView extends ItemView implements ChatInterface {
 			// Remove streaming class to finalize the message
 			streamingContainer.classList.remove('streaming-message');
 
-			// Convert to proper markdown rendering
+			const settings = this.getSettings();
 			const messageContent = streamingContainer.querySelector(
 				'.message-content'
 			) as HTMLElement;
@@ -975,8 +1018,13 @@ export class ChatView extends ItemView implements ChatInterface {
 			if (messageContent) {
 				finalContent = finalContentParam !== undefined ? finalContentParam : (messageContent.textContent || '');
 				messageContent.innerHTML = '';
-				messageContent.addClass('acp-markdown-content');
-				this.renderMarkdownContent(finalContent, messageContent);
+				if (settings?.ui?.enableMarkdown === true) {
+					messageContent.addClass('acp-markdown-content');
+					this.renderMarkdownContent(finalContent, messageContent);
+				} else {
+					const textEl = messageContent.createDiv('acp-text-content');
+					textEl.textContent = finalContent;
+				}
 			}
 
 			// Add copy button for assistant messages
@@ -1084,11 +1132,11 @@ export class ChatView extends ItemView implements ChatInterface {
 		messageEl.addClass(`acp-message-${message.role}`);
 
 		// Add timestamp if enabled
-		const settings = (this.app as any).plugins?.plugins?.['acp-chat-assistant']
-			?.settings;
-		if (settings?.ui?.showTimestamps !== false) {
+		const settings = this.getSettings();
+		if (settings?.ui?.showTimestamps === true) {
 			const timestamp = messageEl.createDiv('acp-message-timestamp');
-			timestamp.textContent = new Date().toLocaleTimeString();
+			const date = message.timestamp ? new Date(message.timestamp) : new Date();
+			timestamp.textContent = date.toLocaleTimeString();
 		}
 
 		// Add role indicator
@@ -1103,7 +1151,7 @@ export class ChatView extends ItemView implements ChatInterface {
 			if (block.type === 'text' && block.text) {
 				if (
 					message.role === 'assistant' &&
-					settings?.ui?.enableMarkdown !== false
+					settings?.ui?.enableMarkdown === true
 				) {
 					// Render markdown for assistant messages
 					const markdownEl = contentEl.createDiv('acp-markdown-content');
@@ -1401,6 +1449,10 @@ export class ChatView extends ItemView implements ChatInterface {
 		params: SessionRequestPermissionParams,
 		wrappedResolve: (id: string | null) => void
 	): void {
+		if (params.sessionId !== this.currentSessionId) {
+			return;
+		}
+
 		// Finalize any active streaming part so the permission request block
 		// is inserted in the correct chronological position within the flow.
 		this.finalizeStreamingMessage();
@@ -1753,8 +1805,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		// Fallback to settings if agent is disconnected
-		const settings = (this.app as any).plugins?.plugins?.['acp-chat-assistant']
-			?.settings;
+		const settings =
+			(this.app as any).plugins?.plugins?.['acp-chat-assistant']?.settings ||
+			(this.app as any).plugins?.getPlugin?.('acp-chat-assistant')?.settings;
 		if (settings?.agents) {
 			const agent = settings.agents.find((a: any) => a.id === agentId);
 			if (agent) return agent.name;
@@ -2410,6 +2463,8 @@ export class ChatView extends ItemView implements ChatInterface {
 
 	private async loadSession(sessionId: string): Promise<void> {
 		if (!this.sessionManager) return;
+
+		this.currentSessionId = sessionId;
 
 		// If the session is persisted-only, we need a live JSON-RPC client to restore it
 		const jsonRpcClient = this.getConnectedJsonRpcClient(this.currentAgentId ?? undefined);

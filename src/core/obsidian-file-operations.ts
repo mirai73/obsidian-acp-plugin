@@ -32,6 +32,10 @@ export class ObsidianFileOperationsHandler implements FileOperationsHandler {
 		this.showNotifications = config.showNotifications ?? false;
 	}
 
+	setShowNotifications(show: boolean): void {
+		this.showNotifications = show;
+	}
+
 	/**
 	 * Read text file using Obsidian's vault API
 	 */
