@@ -59,6 +59,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		} else {
 			this.sessionProcessingStates.set(this.currentSessionId, val);
 		}
+		this.updateInputState();
 	}
 	private pendingPermissionResolvers = new Map<
 		string,
@@ -389,6 +390,9 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Clean input container
 		this.inputContainer = chatWrapper.createDiv('acp-input-container');
+
+		// Thinking border animator
+		this.inputContainer.createDiv('acp-border-animator');
 
 		// Metadata bar (initially hidden)
 		this.metadataBar = chatWrapper.createDiv('acp-metadata-bar');
@@ -1059,19 +1063,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Show a wave indicator (4 pulsating purple icons) on a plain background while the agent is processing/thinking.
 	 */
 	private showProcessingIndicator(): void {
-		if (!this.messagesContainer) return;
-		if (this.messagesContainer.querySelector('.acp-processing-indicator')) return;
-
-		const indicatorEl = this.messagesContainer.createDiv('acp-processing-indicator');
-		const waveContainer = indicatorEl.createDiv('acp-wave-container');
-
-		const icons = ['book', 'wrench', 'globe', 'sparkles'];
-		for (const iconName of icons) {
-			const iconEl = waveContainer.createDiv('acp-wave-icon');
-			setIcon(iconEl, iconName);
-		}
-
-		this.scrollToBottom();
+		// No-op: thinking status is now unified as a traveling border along the input container.
 	}
 
 	/**
@@ -1628,6 +1620,10 @@ export class ChatView extends ItemView implements ChatInterface {
 	}
 
 	private updateInputState(): void {
+		if (this.inputContainer) {
+			this.inputContainer.classList.toggle('is-thinking', this.isProcessing);
+		}
+
 		if (!this.inputField || !this.sendButton) return;
 
 		const isDisconnected = !this.connectionStatus.connected;

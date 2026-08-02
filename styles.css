@@ -152,6 +152,10 @@ body {
 
   --acp-animation-duration: 0.2s;
   --acp-animation-easing: ease-in-out;
+
+  --acp-radius-large: 12px;
+  --acp-radius-medium: 8px;
+  --acp-radius-small: 4px;
 }
 
 /* Theme-specific overrides */
@@ -907,57 +911,10 @@ body {
   }
 }
 
-/* Streaming message styles */
+/* Streaming message styles - legacy sidebar and cursor animations removed */
 .streaming-message {
   position: relative;
   opacity: 0.9;
-}
-
-.streaming-message::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 3px;
-  background: #7b61ff;
-  animation: acp-bar-pulse 1.5s ease-in-out infinite;
-  z-index: 1;
-}
-
-@keyframes acp-bar-pulse {
-
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-
-  50% {
-    opacity: 1;
-  }
-}
-
-
-
-.streaming-message .acp-message-content::after {
-  content: '▋';
-  color: var(--acp-primary-color);
-  animation: streaming-cursor 1s ease-in-out infinite;
-  font-weight: bold;
-  margin-left: 4px;
-}
-
-@keyframes streaming-cursor {
-
-  0%,
-  50% {
-    opacity: 1;
-  }
-
-  51%,
-  100% {
-    opacity: 0;
-  }
 }
 
 .acp-message-system {
@@ -1280,6 +1237,56 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+}
+
+.acp-input-container.is-thinking {
+  border-color: transparent;
+}
+
+.acp-border-animator {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: calc(var(--acp-radius-large) + 2px);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+  overflow: hidden;
+  
+  /* Mask to only render the border pixels (excluding content area) */
+  padding: 2.5px;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+.acp-input-container.is-thinking .acp-border-animator {
+  display: block;
+}
+
+.acp-border-animator::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  padding-bottom: 200%;
+  top: 50%;
+  left: 50%;
+  background: conic-gradient(from 0deg, transparent 0%, var(--acp-primary-color) 15%, transparent 30%, transparent 100%);
+  animation: acp-rotate-border 2.5s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes acp-rotate-border {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 .acp-input-container:focus-within {
