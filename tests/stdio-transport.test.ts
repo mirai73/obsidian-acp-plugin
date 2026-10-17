@@ -96,7 +96,7 @@ describe('StdioTransport', () => {
 		});
 
 		it('should throw error for oversized messages', () => {
-			const largeMessage = 'x'.repeat(2 * 1024 * 1024); // 2MB
+			const largeMessage = 'x'.repeat(65 * 1024 * 1024); // above the 64MB default
 
 			expect(() => {
 				transport.send(largeMessage);
