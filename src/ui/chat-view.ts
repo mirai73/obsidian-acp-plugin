@@ -15,6 +15,7 @@ import {
 	TFile,
 	TFolder,
 	TAbstractFile,
+	Modal,
 } from 'obsidian';
 import {
 	Message,
@@ -115,13 +116,27 @@ export class ChatView extends ItemView implements ChatInterface {
 
 	// Selected text context
 	private selectedTextBadge: HTMLElement | null = null;
-	private selectedTextContext: { text: string; from: number; to: number } | null = null;
+	private selectedTextContext: {
+		text: string;
+		from: number;
+		to: number;
+	} | null = null;
 
 	// Additional vault context items (added via # autocomplete)
-	private additionalContextItems: Array<{ path: string; name: string; type: 'file' | 'folder' }> = [];
+	private additionalContextItems: Array<{
+		path: string;
+		name: string;
+		type: 'file' | 'folder';
+	}> = [];
+	private pastedImages: Array<{ id: string; mimeType: string; data: string }> =
+		[];
 	private additionalContextContainer: HTMLElement | null = null;
 	private vaultDropdown: HTMLElement | null = null;
-	private filteredVaultItems: Array<{ path: string; name: string; type: 'file' | 'folder' }> = [];
+	private filteredVaultItems: Array<{
+		path: string;
+		name: string;
+		type: 'file' | 'folder';
+	}> = [];
 	private selectedVaultIndex: number = -1;
 	private activeHashQuery: string | null = null; // the current #query string being completed
 
@@ -221,7 +236,10 @@ export class ChatView extends ItemView implements ChatInterface {
 	/**
 	 * Set the ACP client for message sending
 	 */
-	setACPClient(client: ACPClientImpl, persistenceService?: import('../core/session-persistence').SessionPersistenceService): void {
+	setACPClient(
+		client: ACPClientImpl,
+		persistenceService?: import('../core/session-persistence').SessionPersistenceService
+	): void {
 		this.acpClient = client;
 
 		// Initialize session manager with streaming callback and optional persistence
@@ -410,7 +428,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.selectedTextBadge.style.display = 'none';
 
 		// Additional vault context items container (badges added via # trigger)
-		this.additionalContextContainer = contextRow.createDiv('acp-additional-context-container');
+		this.additionalContextContainer = contextRow.createDiv(
+			'acp-additional-context-container'
+		);
 
 		// Input row with text area and enhanced send button
 		const inputRow = this.inputContainer.createDiv('acp-input-row');
@@ -431,9 +451,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Agent dropdown
 		const agentContainer = selectorsRow.createDiv('acp-selector-wrapper');
 		this.agentNameEl = agentContainer.createSpan({
-			text: this.getAgentName(this.currentAgentId) ?? 'None',
 			cls: 'acp-selector-label',
 		});
+		this.updateAgentNameDisplay();
 		// this.agentSelector = agentContainer.createEl('select', {
 		// 	cls: 'acp-agent-selector is-readonly',
 		// });
@@ -494,10 +514,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Enter key to send (Shift+Enter for new line)
 		this.inputField.addEventListener('keydown', (event) => {
 			// Handle vault dropdown navigation (# trigger)
-			if (
-				this.vaultDropdown &&
-				this.vaultDropdown.style.display !== 'none'
-			) {
+			if (this.vaultDropdown && this.vaultDropdown.style.display !== 'none') {
 				if (event.key === 'ArrowDown') {
 					event.preventDefault();
 					this.navigateVaultDropdown(1);
@@ -513,9 +530,14 @@ export class ChatView extends ItemView implements ChatInterface {
 						return;
 					}
 				} else if (event.key === 'Enter') {
-					if (this.selectedVaultIndex >= 0 && this.filteredVaultItems.length > 0) {
+					if (
+						this.selectedVaultIndex >= 0 &&
+						this.filteredVaultItems.length > 0
+					) {
 						event.preventDefault();
-						this.selectVaultItem(this.filteredVaultItems[this.selectedVaultIndex]);
+						this.selectVaultItem(
+							this.filteredVaultItems[this.selectedVaultIndex]
+						);
 						return;
 					}
 				} else if (event.key === 'Escape') {
@@ -554,6 +576,29 @@ export class ChatView extends ItemView implements ChatInterface {
 			if (event.key === 'Enter' && !event.shiftKey) {
 				event.preventDefault();
 				this.handleSendMessage();
+			}
+		});
+
+		// Handle slash command trigger and filtering
+		this.inputField.addEventListener('paste', (event) => {
+			const files = Array.from(event.clipboardData?.files ?? []).filter((f) =>
+				f.type.startsWith('image/')
+			);
+			if (files.length === 0) return;
+			event.preventDefault();
+			for (const file of files) {
+				const reader = new FileReader();
+				reader.onload = () => {
+					const url = String(reader.result);
+					this.pastedImages.push({
+						id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+						mimeType: file.type,
+						data: url.substring(url.indexOf(',') + 1),
+					});
+					this.renderAdditionalContextBadges();
+					this.updateInputState();
+				};
+				reader.readAsDataURL(file);
 			}
 		});
 
@@ -615,9 +660,15 @@ export class ChatView extends ItemView implements ChatInterface {
 
 	private async handleSendMessage(): Promise<void> {
 		const text = this.inputField.value.trim();
-		if (!text || !this.connectionStatus.connected) {
+		if (
+			(!text && this.pastedImages.length === 0) ||
+			!this.connectionStatus.connected
+		) {
 			return;
 		}
+
+		const images = [...this.pastedImages];
+		this.pastedImages = [];
 
 		// Capture and clear selected text context before clearing input
 		const selectionContext = this.selectedTextContext;
@@ -636,7 +687,14 @@ export class ChatView extends ItemView implements ChatInterface {
 		const now = Date.now();
 		const userMessageForUI: Message = {
 			role: 'user',
-			content: [{ type: 'text', text: text }],
+			content: [
+				...images.map((img) => ({
+					type: 'image' as const,
+					data: img.data,
+					mimeType: img.mimeType,
+				})),
+				...(text ? [{ type: 'text' as const, text }] : []),
+			],
 			timestamp: now,
 		};
 
@@ -646,7 +704,11 @@ export class ChatView extends ItemView implements ChatInterface {
 			timestamp: now,
 		};
 
-		const usedContext: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }> = [];
+		const usedContext: Array<{
+			label: string;
+			path?: string;
+			type: 'file' | 'folder' | 'selection' | 'document';
+		}> = [];
 
 		if (
 			this.isDocumentAddedToContext &&
@@ -662,7 +724,8 @@ export class ChatView extends ItemView implements ChatInterface {
 				type: 'resource_link',
 				uri: `file//${this.sessionDocumentFile.path}`,
 				name: this.sessionDocumentFile.name,
-				mimeType: ExtensionToMime[this.sessionDocumentFile.extension] ?? 'text/plain',
+				mimeType:
+					ExtensionToMime[this.sessionDocumentFile.extension] ?? 'text/plain',
 				size: this.sessionDocumentFile.stat.size,
 				text: `Current document: ${this.sessionDocumentFile.path}\n\n${text}`,
 			});
@@ -678,7 +741,10 @@ export class ChatView extends ItemView implements ChatInterface {
 				});
 			}
 			const contextList = contextItems
-				.map((item) => `- ${item.type === 'folder' ? 'Folder' : 'File'}: ${item.path}`)
+				.map(
+					(item) =>
+						`- ${item.type === 'folder' ? 'Folder' : 'File'}: ${item.path}`
+				)
 				.join('\n');
 			userMessageForAgent.content.unshift({
 				type: 'text',
@@ -705,7 +771,11 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		if (this.isProcessing || this.messageQueue.length > 0) {
 			// Enqueue the message for later dispatch
-			this.messageQueue.push({ text, agentMessage: userMessageForAgent, selectionContext });
+			this.messageQueue.push({
+				text,
+				agentMessage: userMessageForAgent,
+				selectionContext,
+			});
 			if (selectionContext) this.displaySelectionContext(selectionContext);
 			this.displayMessage(userMessageForUI);
 			this.updateQueueIndicator();
@@ -721,7 +791,11 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.dispatchTurn(this.currentSessionId!, text, userMessageForAgent);
 	}
 
-	private async dispatchTurn(sessionId: string, text: string, agentMessage: Message): Promise<void> {
+	private async dispatchTurn(
+		sessionId: string,
+		text: string,
+		agentMessage: Message
+	): Promise<void> {
 		this.sessionProcessingStates.set(sessionId, true);
 		if (sessionId === this.currentSessionId) {
 			this.updateInputState();
@@ -740,16 +814,20 @@ export class ChatView extends ItemView implements ChatInterface {
 			}
 
 			// Remove the temporary streaming container if created
-			const streamingContainer = this.messagesContainer?.querySelector(
-				'.streaming-message'
-			);
+			const streamingContainer =
+				this.messagesContainer?.querySelector('.streaming-message');
 			if (streamingContainer && sessionId === this.currentSessionId) {
 				streamingContainer.remove();
 			}
 
 			this.displayMessage({
 				role: 'system',
-				content: [{ type: 'text', text: `Command '${firstWord}' is a local command and is not executed.` }],
+				content: [
+					{
+						type: 'text',
+						text: `Command '${firstWord}' is a local command and is not executed.`,
+					},
+				],
 			});
 			return;
 		}
@@ -762,7 +840,8 @@ export class ChatView extends ItemView implements ChatInterface {
 			if (sessionId === this.currentSessionId) {
 				const session = this.sessionManager?.getSessionInfo(sessionId);
 				const lastMsg = session?.messages[session.messages.length - 1];
-				const textContent = lastMsg?.content.find(b => b.type === 'text')?.text || '';
+				const textContent =
+					lastMsg?.content.find((b) => b.type === 'text')?.text || '';
 				this.finalizeStreamingMessage(textContent);
 			}
 		} catch (error) {
@@ -813,7 +892,9 @@ export class ChatView extends ItemView implements ChatInterface {
 
 	private updateQueueIndicator(): void {
 		if (!this.queueIndicator) {
-			this.queueIndicator = this.inputContainer.createDiv('acp-queue-indicator');
+			this.queueIndicator = this.inputContainer.createDiv(
+				'acp-queue-indicator'
+			);
 		}
 
 		if (this.messageQueue.length > 0) {
@@ -908,7 +989,77 @@ export class ChatView extends ItemView implements ChatInterface {
 	/**
 	 * Handle streaming message chunks from the agent
 	 */
+	private spawnedBlocks = new Map<string, HTMLDetailsElement>();
+
+	private getSpawnedBlock(spawnedId: string): HTMLDetailsElement {
+		let details = this.spawnedBlocks.get(spawnedId);
+		if (!details || !details.isConnected) {
+			details = this.messagesContainer.createEl('details', {
+				cls: 'acp-spawned-agent',
+			});
+			details.open = true;
+			details.createEl('summary', {
+				text: `Spawned agent (${spawnedId.slice(0, 8)})`,
+			});
+			details.createDiv('acp-spawned-agent-body');
+			this.spawnedBlocks.set(spawnedId, details);
+		}
+		return details;
+	}
+
+	/** Update a spawned agent block from a subagent list update; collapses it once finished. */
+	private updateSpawnedStatus(
+		spawnedId: string,
+		name: string | undefined,
+		status: string | undefined
+	): void {
+		if (!this.messagesContainer) return;
+		const details = this.getSpawnedBlock(spawnedId);
+		const finished =
+			!!status &&
+			['terminated', 'completed', 'finished', 'failed', 'error'].includes(
+				status
+			);
+		const label = name || spawnedId.slice(0, 8);
+		const summary = details.querySelector('summary');
+		if (summary) {
+			summary.textContent = `Spawned agent: ${label}${finished ? ` (${status})` : ''}`;
+		}
+		details.toggleClass('is-finished', finished);
+		if (finished) details.open = false;
+	}
+
+	/** Render output of an agent spawned by the main agent in its own collapsible block. */
+	private appendSpawnedChunk(
+		spawnedId: string,
+		kind: 'message' | 'thought',
+		text: string
+	): void {
+		if (!this.messagesContainer) return;
+		const body = this.getSpawnedBlock(spawnedId).querySelector(
+			'.acp-spawned-agent-body'
+		) as HTMLElement;
+		const last = body.lastElementChild as HTMLElement | null;
+		const cls =
+			kind === 'thought' ? 'acp-spawned-thought' : 'acp-spawned-message';
+		if (last && last.hasClass(cls)) {
+			last.textContent = (last.textContent || '') + text;
+		} else {
+			body.createDiv({ cls, text });
+		}
+		body.scrollTop = body.scrollHeight;
+		this.scrollToBottom();
+	}
+
 	private handleStreamingChunk(sessionId: string, chunk: any): void {
+		if (chunk?.type === 'spawned') {
+			this.appendSpawnedChunk(sessionId, chunk.kind, chunk.text);
+			return;
+		}
+		if (chunk?.type === 'spawned_status') {
+			this.updateSpawnedStatus(sessionId, chunk.name, chunk.status);
+			return;
+		}
 		if (!chunk) return;
 		if (sessionId !== this.currentSessionId) return;
 
@@ -933,12 +1084,22 @@ export class ChatView extends ItemView implements ChatInterface {
 			if (chunk.status === 'compacting') {
 				this.displayMessage({
 					role: 'system',
-					content: [{ type: 'text', text: '⚡ Compacting conversation context to free up tokens...' }]
+					content: [
+						{
+							type: 'text',
+							text: '⚡ Compacting conversation context to free up tokens...',
+						},
+					],
 				});
 			} else if (chunk.status === 'completed') {
 				this.displayMessage({
 					role: 'system',
-					content: [{ type: 'text', text: `✅ Compaction completed. Freed ${chunk.freedTokens || 0} tokens. Summary: ${chunk.summary || 'N/A'}` }]
+					content: [
+						{
+							type: 'text',
+							text: `✅ Compaction completed. Freed ${chunk.freedTokens || 0} tokens. Summary: ${chunk.summary || 'N/A'}`,
+						},
+					],
 				});
 			}
 			return;
@@ -950,7 +1111,13 @@ export class ChatView extends ItemView implements ChatInterface {
 			return;
 		}
 
+		if (chunk.type === 'thought') {
+			this.appendThinkingChunk(chunk.text);
+			return;
+		}
+
 		if (chunk.type === 'tool_call') {
+			this.completeThinking();
 			this.displayToolCall(chunk);
 			return;
 		}
@@ -970,6 +1137,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		) as HTMLElement;
 
 		if (!streamingContainer) {
+			this.completeThinking();
 			this.hideProcessingIndicator();
 			// Create new streaming message container
 			streamingContainer = this.messagesContainer.createDiv(
@@ -1001,10 +1169,49 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
+	private appendThinkingChunk(text: string): void {
+		if (!this.messagesContainer) return;
+		let el = this.messagesContainer.querySelector(
+			'.acp-thinking-live'
+		) as HTMLElement | null;
+		if (!el) {
+			this.hideProcessingIndicator();
+			el = this.messagesContainer.createDiv('acp-thinking acp-thinking-live');
+			el.createDiv('acp-thinking-label').textContent = 'Thinking...';
+			el.createDiv('acp-thinking-body');
+		}
+		const body = el.querySelector('.acp-thinking-body') as HTMLElement;
+		body.textContent = (body.textContent || '') + text;
+		body.scrollTop = body.scrollHeight;
+		this.scrollToBottom();
+	}
+
+	/** Replace the live thinking box with a collapsed expandable element. */
+	private completeThinking(): void {
+		const el = this.messagesContainer?.querySelector(
+			'.acp-thinking-live'
+		) as HTMLElement | null;
+		if (!el) return;
+		const text = (
+			el.querySelector('.acp-thinking-body')?.textContent || ''
+		).trim();
+		if (!text) {
+			el.remove();
+			return;
+		}
+		const details = createEl('details', {
+			cls: 'acp-thinking acp-thinking-done',
+		});
+		details.createEl('summary', { text: 'Thinking' });
+		details.createDiv('acp-thinking-content').textContent = text;
+		el.replaceWith(details);
+	}
+
 	/**
 	 * Finalize streaming message (called when streaming is complete)
 	 */
 	private finalizeStreamingMessage(finalContentParam?: string): void {
+		this.completeThinking();
 		this.hideProcessingIndicator();
 		const streamingContainer = this.messagesContainer?.querySelector(
 			'.streaming-message'
@@ -1020,7 +1227,10 @@ export class ChatView extends ItemView implements ChatInterface {
 			) as HTMLElement;
 			let finalContent = '';
 			if (messageContent) {
-				finalContent = finalContentParam !== undefined ? finalContentParam : (messageContent.textContent || '');
+				finalContent =
+					finalContentParam !== undefined
+						? finalContentParam
+						: messageContent.textContent || '';
 				messageContent.innerHTML = '';
 				if (settings?.ui?.enableMarkdown === true) {
 					messageContent.addClass('acp-markdown-content');
@@ -1037,11 +1247,11 @@ export class ChatView extends ItemView implements ChatInterface {
 				attr: { 'aria-label': 'Copy message' },
 			});
 			setIcon(copyBtn, 'copy');
-			
+
 			copyBtn.addEventListener('click', async () => {
 				// Extract text content from the message
 				const textContent = finalContent || messageContent?.textContent || '';
-				
+
 				try {
 					await navigator.clipboard.writeText(textContent);
 					// Visual feedback
@@ -1071,7 +1281,9 @@ export class ChatView extends ItemView implements ChatInterface {
 	 */
 	private hideProcessingIndicator(): void {
 		if (!this.messagesContainer) return;
-		const indicatorEl = this.messagesContainer.querySelector('.acp-processing-indicator');
+		const indicatorEl = this.messagesContainer.querySelector(
+			'.acp-processing-indicator'
+		);
 		if (indicatorEl) {
 			indicatorEl.remove();
 		}
@@ -1080,7 +1292,11 @@ export class ChatView extends ItemView implements ChatInterface {
 	/**
 	 * Render a collapsible selected-text context widget above the user message bubble.
 	 */
-	private displaySelectionContext(ctx: { text: string; from: number; to: number }): void {
+	private displaySelectionContext(ctx: {
+		text: string;
+		from: number;
+		to: number;
+	}): void {
 		const wrapper = this.messagesContainer.createDiv('acp-selection-context');
 
 		// Header row — always visible
@@ -1114,8 +1330,12 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Display a message in the chat
 	 */
 	displayMessage(message: Message): void {
-		const toolCallBlock = message.content.find(b => b.type === 'tool_call');
-		if (message.role === 'system' && toolCallBlock && (toolCallBlock as any).toolCall) {
+		const toolCallBlock = message.content.find((b) => b.type === 'tool_call');
+		if (
+			message.role === 'system' &&
+			toolCallBlock &&
+			(toolCallBlock as any).toolCall
+		) {
 			this.displayToolCall((toolCallBlock as any).toolCall);
 			return;
 		}
@@ -1189,11 +1409,11 @@ export class ChatView extends ItemView implements ChatInterface {
 				attr: { 'aria-label': 'Copy message' },
 			});
 			setIcon(copyBtn, 'copy');
-			
+
 			copyBtn.addEventListener('click', async () => {
 				// Extract text content from all blocks, preserving markdown formatting for text/diff
 				const textContent = message.content
-					.map(block => {
+					.map((block) => {
 						if (block.type === 'text' && block.text) {
 							return block.text;
 						}
@@ -1204,7 +1424,7 @@ export class ChatView extends ItemView implements ChatInterface {
 					})
 					.filter(Boolean)
 					.join('\n\n');
-				
+
 				try {
 					await navigator.clipboard.writeText(textContent);
 					// Visual feedback
@@ -1222,8 +1442,14 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		// Add context badges row OUTSIDE / UNDER the user message box
-		if (message.role === 'user' && message.usedContext && message.usedContext.length > 0) {
-			const contextRow = this.messagesContainer.createDiv('acp-user-message-context-row');
+		if (
+			message.role === 'user' &&
+			message.usedContext &&
+			message.usedContext.length > 0
+		) {
+			const contextRow = this.messagesContainer.createDiv(
+				'acp-user-message-context-row'
+			);
 			for (const ctx of message.usedContext) {
 				const badge = contextRow.createDiv('acp-selection-badge');
 				badge.style.display = 'inline-flex';
@@ -1239,7 +1465,10 @@ export class ChatView extends ItemView implements ChatInterface {
 				else if (ctx.type === 'document') iconName = 'file-text';
 				setIcon(badgeIcon, iconName);
 
-				const labelSpan = badge.createSpan({ cls: 'acp-selection-badge-label', text: ctx.label });
+				const labelSpan = badge.createSpan({
+					cls: 'acp-selection-badge-label',
+					text: ctx.label,
+				});
 				if (ctx.path) labelSpan.title = ctx.path;
 			}
 		}
@@ -1366,7 +1595,9 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		// Re-render body whenever rawInput / rawOutput arrive
 		if (chunk.rawInput !== undefined || chunk.rawOutput !== undefined) {
-			const body = messageEl.querySelector('.acp-tool-call-body') as HTMLElement;
+			const body = messageEl.querySelector(
+				'.acp-tool-call-body'
+			) as HTMLElement;
 			if (body) {
 				this.renderToolCallBody(body, chunk.rawInput, chunk.rawOutput);
 			}
@@ -1377,7 +1608,11 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Render raw input / output sections inside a tool call body element.
 	 * Safe to call multiple times — clears and re-renders each time.
 	 */
-	private renderToolCallBody(body: HTMLElement, rawInput: any, rawOutput: any): void {
+	private renderToolCallBody(
+		body: HTMLElement,
+		rawInput: any,
+		rawOutput: any
+	): void {
 		body.empty();
 
 		const hasInput = rawInput !== undefined && rawInput !== null;
@@ -1387,7 +1622,11 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		const fmt = (val: any): string => {
 			if (typeof val === 'string') return val;
-			try { return JSON.stringify(val, null, 2); } catch { return String(val); }
+			try {
+				return JSON.stringify(val, null, 2);
+			} catch {
+				return String(val);
+			}
 		};
 
 		if (hasInput) {
@@ -1441,7 +1680,11 @@ export class ChatView extends ItemView implements ChatInterface {
 		params: SessionRequestPermissionParams,
 		wrappedResolve: (id: string | null) => void
 	): void {
-		if (params.sessionId !== this.currentSessionId) {
+		// Known background sessions render when switched to; spawned agents have no session of their own, so show now.
+		const isKnownSession = !!this.sessionManager?.getSessionInfo(
+			params.sessionId
+		);
+		if (params.sessionId !== this.currentSessionId && isKnownSession) {
 			return;
 		}
 
@@ -1611,7 +1854,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		// // Proactively create session if connected
 		if (status.connected && !this.currentSessionId && this.acpClient) {
 			this.ensureSession()
-				.catch((err) => console.error('Failed to proactively create session:', err))
+				.catch((err) =>
+					console.error('Failed to proactively create session:', err)
+				)
 				.then(() => {
 					this.updateInputState();
 					this.updateQueueIndicator();
@@ -1627,14 +1872,17 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (!this.inputField || !this.sendButton) return;
 
 		const isDisconnected = !this.connectionStatus.connected;
-		const isInputEmpty = !this.inputField.value.trim();
+		const isInputEmpty =
+			!this.inputField.value.trim() && this.pastedImages.length === 0;
 
 		// Input field disabled when disconnected or restoring a session (Req 1.2)
 		this.inputField.disabled = isDisconnected || this.isRestoringSession;
 
 		// Send button disabled when disconnected, restoring, or (not processing and input empty) (Req 2.3)
 		this.sendButton.disabled =
-			isDisconnected || this.isRestoringSession || (!this.isProcessing && isInputEmpty);
+			isDisconnected ||
+			this.isRestoringSession ||
+			(!this.isProcessing && isInputEmpty);
 
 		// Show cancel icon only when processing with empty queue (Req 2.1, 2.2)
 		const isCancelMode = this.isProcessing && this.messageQueue.length === 0;
@@ -1663,14 +1911,16 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		this.documentContextBox.empty();
 
-		const conversationIsEmpty = this.getSessionMessages().length === 0 &&
+		const conversationIsEmpty =
+			this.getSessionMessages().length === 0 &&
 			this.messagesContainer.childElementCount === 0;
 		// When a document is attached to the session, show that file.
 		// Otherwise show the currently active file (only for empty conversations).
 		const displayFile = this.isDocumentAddedToContext
 			? this.sessionDocumentFile
 			: this.activeFile;
-		const shouldShow = displayFile && (conversationIsEmpty || this.isDocumentAddedToContext);
+		const shouldShow =
+			displayFile && (conversationIsEmpty || this.isDocumentAddedToContext);
 
 		if (!shouldShow) {
 			this.documentContextBox.style.display = 'none';
@@ -1708,13 +1958,17 @@ export class ChatView extends ItemView implements ChatInterface {
 					// Session not yet created — persist after it's created
 					const snapshotFile = this.sessionDocumentFile;
 					const snapshotAdded = this.isDocumentAddedToContext;
-					this.ensureSession().then((newSessionId) => {
-						const session = this.sessionManager?.getSessionInfo(newSessionId);
-						if (session) {
-							session.isDocumentAddedToContext = snapshotAdded;
-							session.attachedDocumentPath = snapshotFile?.path;
-						}
-					}).catch(() => {/* ignore */});
+					this.ensureSession()
+						.then((newSessionId) => {
+							const session = this.sessionManager?.getSessionInfo(newSessionId);
+							if (session) {
+								session.isDocumentAddedToContext = snapshotAdded;
+								session.attachedDocumentPath = snapshotFile?.path;
+							}
+						})
+						.catch(() => {
+							/* ignore */
+						});
 				}
 			}
 			this.updateDocumentContextBox();
@@ -1761,7 +2015,11 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 		toOffset += to.ch;
 
-		this.selectedTextContext = { text: selection, from: fromOffset, to: toOffset };
+		this.selectedTextContext = {
+			text: selection,
+			from: fromOffset,
+			to: toOffset,
+		};
 		this.updateSelectionBadge();
 	}
 
@@ -1812,11 +2070,29 @@ export class ChatView extends ItemView implements ChatInterface {
 		return agentId;
 	}
 
+	private getAgentIcon(agentId?: string | null): string | undefined {
+		if (!agentId) return undefined;
+		const settings =
+			(this.app as any).plugins?.plugins?.['acp-chat-assistant']?.settings ||
+			(this.app as any).plugins?.getPlugin?.('acp-chat-assistant')?.settings;
+		return (
+			settings?.agents?.find((a: any) => a.id === agentId)?.icon || undefined
+		);
+	}
+
 	private updateAgentNameDisplay(): void {
 		if (!this.agentNameEl) return;
 
 		const agentName = this.getAgentName(this.currentAgentId) || 'None';
-		this.agentNameEl.textContent = agentName;
+		const icon = this.getAgentIcon(this.currentAgentId);
+		this.agentNameEl.empty();
+		if (icon) {
+			setIcon(this.agentNameEl, icon);
+			this.agentNameEl.setAttribute('aria-label', agentName);
+		} else {
+			this.agentNameEl.removeAttribute('aria-label');
+			this.agentNameEl.textContent = agentName;
+		}
 	}
 
 	private updateModeSelector(): void {
@@ -1950,7 +2226,12 @@ export class ChatView extends ItemView implements ChatInterface {
 		const allFiles = this.app.vault.getAllLoadedFiles();
 
 		// Build list of matching files and folders (skip root)
-		const items: Array<{ path: string; name: string; type: 'file' | 'folder'; score: number }> = [];
+		const items: Array<{
+			path: string;
+			name: string;
+			type: 'file' | 'folder';
+			score: number;
+		}> = [];
 		for (const file of allFiles) {
 			if (file.path === '/') continue;
 			const isFolder = file instanceof TFolder;
@@ -1958,12 +2239,26 @@ export class ChatView extends ItemView implements ChatInterface {
 			const lName = name.toLowerCase();
 			const lPath = file.path.toLowerCase();
 
-			if (lowerQuery === '' || lName.includes(lowerQuery) || lPath.includes(lowerQuery)) {
+			if (
+				lowerQuery === '' ||
+				lName.includes(lowerQuery) ||
+				lPath.includes(lowerQuery)
+			) {
 				// Already added?
-				if (this.additionalContextItems.some((i) => i.path === file.path)) continue;
-				const nameMatch = lName.startsWith(lowerQuery) ? 2 : lName.includes(lowerQuery) ? 1 : 0;
+				if (this.additionalContextItems.some((i) => i.path === file.path))
+					continue;
+				const nameMatch = lName.startsWith(lowerQuery)
+					? 2
+					: lName.includes(lowerQuery)
+						? 1
+						: 0;
 				const score = nameMatch;
-				items.push({ path: file.path, name, type: isFolder ? 'folder' : 'file', score });
+				items.push({
+					path: file.path,
+					name,
+					type: isFolder ? 'folder' : 'file',
+					score,
+				});
 			}
 		}
 
@@ -1994,12 +2289,16 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
-	private renderVaultList(items: Array<{ path: string; name: string; type: 'file' | 'folder' }>): void {
+	private renderVaultList(
+		items: Array<{ path: string; name: string; type: 'file' | 'folder' }>
+	): void {
 		if (!this.vaultDropdown) return;
 		this.vaultDropdown.empty();
 
 		items.forEach((item, index) => {
-			const el = this.vaultDropdown!.createDiv('acp-dropdown-item acp-vault-dropdown-item');
+			const el = this.vaultDropdown!.createDiv(
+				'acp-dropdown-item acp-vault-dropdown-item'
+			);
 
 			const iconEl = el.createSpan('acp-vault-dropdown-icon');
 			setIcon(iconEl, item.type === 'folder' ? 'folder' : 'file');
@@ -2024,7 +2323,9 @@ export class ChatView extends ItemView implements ChatInterface {
 
 	private highlightVaultItem(): void {
 		if (!this.vaultDropdown) return;
-		const items = this.vaultDropdown.querySelectorAll('.acp-vault-dropdown-item');
+		const items = this.vaultDropdown.querySelectorAll(
+			'.acp-vault-dropdown-item'
+		);
 		items.forEach((item, index) => {
 			if (index === this.selectedVaultIndex) {
 				item.addClass('is-selected');
@@ -2046,7 +2347,8 @@ export class ChatView extends ItemView implements ChatInterface {
 	private tabCompleteVaultItem(): void {
 		if (this.filteredVaultItems.length === 0) return;
 
-		const cursorPos = this.inputField.selectionStart ?? this.inputField.value.length;
+		const cursorPos =
+			this.inputField.selectionStart ?? this.inputField.value.length;
 		const textUpToCursor = this.inputField.value.substring(0, cursorPos);
 		const hashMatch = textUpToCursor.match(/(^|\s)#([^\s#]*)$/);
 		if (!hashMatch) return;
@@ -2103,10 +2405,15 @@ export class ChatView extends ItemView implements ChatInterface {
 		return prefix;
 	}
 
-	private selectVaultItem(item: { path: string; name: string; type: 'file' | 'folder' }): void {
+	private selectVaultItem(item: {
+		path: string;
+		name: string;
+		type: 'file' | 'folder';
+	}): void {
 		// Replace the active #query token in the textarea with nothing (token consumed)
 		if (this.activeHashQuery !== null) {
-			const cursorPos = this.inputField.selectionStart ?? this.inputField.value.length;
+			const cursorPos =
+				this.inputField.selectionStart ?? this.inputField.value.length;
 			const textUpToCursor = this.inputField.value.substring(0, cursorPos);
 			const textAfterCursor = this.inputField.value.substring(cursorPos);
 
@@ -2135,7 +2442,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (!this.sessionManager || !this.currentSessionId) return;
 		const session = this.sessionManager.getSessionInfo(this.currentSessionId);
 		if (session) {
-			session.attachedContextPaths = this.additionalContextItems.map((i) => i.path);
+			session.attachedContextPaths = this.additionalContextItems.map(
+				(i) => i.path
+			);
 		}
 	}
 
@@ -2143,13 +2452,44 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (!this.additionalContextContainer) return;
 		this.additionalContextContainer.empty();
 
+		for (const img of this.pastedImages) {
+			const badge = this.additionalContextContainer.createDiv(
+				'acp-context-item-badge'
+			);
+			setIcon(badge.createSpan('acp-context-item-icon'), 'image');
+			badge.createSpan({ cls: 'acp-context-item-label', text: 'Image' });
+			badge.addClass('is-clickable');
+			badge.addEventListener('click', () => {
+				new ImagePreviewModal(
+					this.app,
+					`data:${img.mimeType};base64,${img.data}`
+				).open();
+			});
+			const dismiss = badge.createEl('button', {
+				cls: 'acp-context-item-dismiss',
+				attr: { 'aria-label': 'Remove image' },
+			});
+			setIcon(dismiss, 'x');
+			dismiss.addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.pastedImages = this.pastedImages.filter((i) => i.id !== img.id);
+				this.renderAdditionalContextBadges();
+				this.updateInputState();
+			});
+		}
+
 		for (const item of this.additionalContextItems) {
-			const badge = this.additionalContextContainer.createDiv('acp-context-item-badge');
+			const badge = this.additionalContextContainer.createDiv(
+				'acp-context-item-badge'
+			);
 
 			const iconEl = badge.createSpan('acp-context-item-icon');
 			setIcon(iconEl, item.type === 'folder' ? 'folder' : 'file');
 
-			const label = badge.createSpan({ cls: 'acp-context-item-label', text: item.name });
+			const label = badge.createSpan({
+				cls: 'acp-context-item-label',
+				text: item.name,
+			});
 			label.title = item.path;
 
 			const dismiss = badge.createEl('button', {
@@ -2213,8 +2553,12 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
-	private async showArgumentDropdown(command: string, query: string): Promise<void> {
-		if (!this.commandDropdown || !this.currentSessionId || !this.sessionManager) return;
+	private async showArgumentDropdown(
+		command: string,
+		query: string
+	): Promise<void> {
+		if (!this.commandDropdown || !this.currentSessionId || !this.sessionManager)
+			return;
 
 		try {
 			const options = await this.sessionManager.getCommandOptions(
@@ -2319,7 +2663,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Context window usage progress bar
 		const hasUsagePercent = metadata.contextUsagePercentage !== undefined;
 		const hasUsage = metadata.contextUsage !== undefined;
-		
+
 		if (hasUsagePercent || hasUsage) {
 			const contextItem = this.metadataBar.createDiv('acp-metadata-item');
 			contextItem.createSpan({ text: 'Context: ' });
@@ -2337,18 +2681,30 @@ export class ChatView extends ItemView implements ChatInterface {
 		let creditsValue = '';
 		let creditText = '';
 
-		if (metadata.meteringUsage && Array.isArray(metadata.meteringUsage) && metadata.meteringUsage.length > 0) {
-			const creditMeter = metadata.meteringUsage.find((m: any) => m.unit === 'credit');
+		if (
+			metadata.meteringUsage &&
+			Array.isArray(metadata.meteringUsage) &&
+			metadata.meteringUsage.length > 0
+		) {
+			const creditMeter = metadata.meteringUsage.find(
+				(m: any) => m.unit === 'credit'
+			);
 			if (creditMeter) {
 				hasCredits = true;
 				creditsValue = creditMeter.value.toFixed(4);
 				// Join remaining non-credit metering if any
-				const others = metadata.meteringUsage.filter((m: any) => m.unit !== 'credit');
+				const others = metadata.meteringUsage.filter(
+					(m: any) => m.unit !== 'credit'
+				);
 				if (others.length > 0) {
-					creditText = others.map((m: any) => `${m.value} ${m.unitPlural || m.unit}`).join(', ');
+					creditText = others
+						.map((m: any) => `${m.value} ${m.unitPlural || m.unit}`)
+						.join(', ');
 				}
 			} else {
-				creditText = metadata.meteringUsage.map((m: any) => `${m.value} ${m.unitPlural || m.unit}`).join(', ');
+				creditText = metadata.meteringUsage
+					.map((m: any) => `${m.value} ${m.unitPlural || m.unit}`)
+					.join(', ');
 			}
 		} else if (metadata.creditUsage !== undefined) {
 			hasCredits = true;
@@ -2359,9 +2715,11 @@ export class ChatView extends ItemView implements ChatInterface {
 
 		if (hasCredits || creditText) {
 			const infoItem = this.metadataBar.createDiv('acp-metadata-item');
-			
+
 			if (hasCredits) {
-				const coinIconSpan = infoItem.createSpan({ cls: 'acp-metadata-coin-icon' });
+				const coinIconSpan = infoItem.createSpan({
+					cls: 'acp-metadata-coin-icon',
+				});
 				setIcon(coinIconSpan, 'coins');
 				infoItem.createSpan({ text: ` ${creditsValue}` });
 				if (creditText) {
@@ -2413,7 +2771,8 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.messageQueue = [];
 		this.updateQueueIndicator();
 		// Remove any in-progress streaming element before clearing the container (Req 3.4)
-		const streamingEl = this.messagesContainer?.querySelector('.streaming-message');
+		const streamingEl =
+			this.messagesContainer?.querySelector('.streaming-message');
 		if (streamingEl) {
 			streamingEl.remove();
 		}
@@ -2429,6 +2788,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.sessionDocumentFile = null;
 		// Reset additional vault context items
 		this.additionalContextItems = [];
+		this.pastedImages = [];
 		this.renderAdditionalContextBadges();
 		this.updateDocumentContextBox();
 		await this.ensureSession();
@@ -2463,22 +2823,27 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.currentSessionId = sessionId;
 
 		// If the session is persisted-only, we need a live JSON-RPC client to restore it
-		const jsonRpcClient = this.getConnectedJsonRpcClient(this.currentAgentId ?? undefined);
+		const jsonRpcClient = this.getConnectedJsonRpcClient(
+			this.currentAgentId ?? undefined
+		);
 		// @ts-ignore
 		const vaultPath = this.app.vault.adapter.basePath || process.cwd();
 
 		// Pass negotiated agent capabilities so session/load is used when supported
 		const agentCapabilities = this.acpClient
 			?.getConnections()
-			?.get(this.currentAgentId ?? '')
-			?.agentCapabilities;
+			?.get(this.currentAgentId ?? '')?.agentCapabilities;
 
 		this.isRestoringSession = true;
 		this.updateInputState();
 		this.messagesContainer.empty();
 
-		const loadingContainer = this.messagesContainer.createDiv('acp-loading-container');
-		const spinnerSpan = loadingContainer.createSpan({ cls: 'acp-loading-spinner' });
+		const loadingContainer = this.messagesContainer.createDiv(
+			'acp-loading-container'
+		);
+		const spinnerSpan = loadingContainer.createSpan({
+			cls: 'acp-loading-spinner',
+		});
 		setIcon(spinnerSpan, 'loader');
 		loadingContainer.createSpan({ text: 'Restoring conversation...' });
 
@@ -2495,7 +2860,9 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.updateInputState();
 			this.messagesContainer.empty();
 			if (this.currentSessionId) {
-				const prevSession = this.sessionManager.getSessionInfo(this.currentSessionId);
+				const prevSession = this.sessionManager.getSessionInfo(
+					this.currentSessionId
+				);
 				if (prevSession) {
 					prevSession.messages.forEach((msg: Message) => {
 						const displayMsg = this.cleanMessageForDisplay(msg);
@@ -2562,7 +2929,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Restore per-session document attachment state
 		this.isDocumentAddedToContext = session.isDocumentAddedToContext ?? false;
 		this.sessionDocumentFile = session.attachedDocumentPath
-			? (this.app.vault.getAbstractFileByPath(session.attachedDocumentPath) as TFile | null)
+			? (this.app.vault.getAbstractFileByPath(
+					session.attachedDocumentPath
+				) as TFile | null)
 			: null;
 
 		if (this.sessionDocumentFile) {
@@ -2570,12 +2939,14 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		// Restore additional vault context items for this session
-		this.additionalContextItems = (session.attachedContextPaths ?? []).map((p) => {
-			const file = this.app.vault.getAbstractFileByPath(p);
-			const type = file instanceof TFolder ? 'folder' : 'file';
-			const name = file ? file.name : p.split('/').pop() ?? p;
-			return { path: p, name, type };
-		});
+		this.additionalContextItems = (session.attachedContextPaths ?? []).map(
+			(p) => {
+				const file = this.app.vault.getAbstractFileByPath(p);
+				const type = file instanceof TFolder ? 'folder' : 'file';
+				const name = file ? file.name : (p.split('/').pop() ?? p);
+				return { path: p, name, type };
+			}
+		);
 		this.renderAdditionalContextBadges();
 
 		this.updateDocumentContextBox();
@@ -2663,6 +3034,26 @@ export class ChatView extends ItemView implements ChatInterface {
 /**
  * Modal to suggest and switch between sessions (live + persisted)
  */
+class ImagePreviewModal extends Modal {
+	constructor(
+		app: App,
+		private src: string
+	) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.contentEl.createEl('img', {
+			cls: 'acp-image-preview',
+			attr: { src: this.src, alt: 'Pasted image' },
+		});
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
 class SessionSuggestModal extends SuggestModal<SessionSummary> {
 	private sessions: SessionSummary[];
 	private onSelect: (sessionId: string) => void;
@@ -2702,9 +3093,15 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 		const row = container.createDiv('acp-session-row');
 
 		// Determine the session state
-		let state: 'history' | 'thinking' | 'waiting-for-permission' | 'waiting-for-input' = 'history';
+		let state:
+			| 'history'
+			| 'thinking'
+			| 'waiting-for-permission'
+			| 'waiting-for-input' = 'history';
 		if (session.isLive) {
-			const isWaitingPerm = this.chatView.isSessionWaitingForPermission(session.sessionId);
+			const isWaitingPerm = this.chatView.isSessionWaitingForPermission(
+				session.sessionId
+			);
 			const isProcessing = this.chatView.isSessionProcessing(session.sessionId);
 			if (isWaitingPerm) {
 				state = 'waiting-for-permission';
@@ -2736,7 +3133,9 @@ class SessionSuggestModal extends SuggestModal<SessionSummary> {
 		// Agent name
 		let agentName = session.agentId;
 		if (this.acpClient) {
-			const status = this.acpClient.getAllConnectionStatuses().get(session.agentId);
+			const status = this.acpClient
+				.getAllConnectionStatuses()
+				.get(session.agentId);
 			if (status?.agentName) agentName = status.agentName;
 		}
 
