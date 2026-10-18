@@ -1786,22 +1786,6 @@ body {
 	padding-top: 0.75rem;
 	border-top: 1px solid var(--background-modifier-border);
 }
-.acp-settings-container .checkbox-container,
-.acp-permission-dialog .checkbox-container {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	cursor: pointer;
-	font-size: 0.9rem;
-	margin-right: 0.5rem;
-	user-select: none;
-	white-space: nowrap;
-}
-.acp-settings-container .checkbox-container input[type="checkbox"],
-.acp-permission-dialog .checkbox-container input[type="checkbox"] {
-	margin: 0;
-	cursor: pointer;
-}
 .connection-status-container {
 	margin: 1rem 0;
 	padding: 1rem;
