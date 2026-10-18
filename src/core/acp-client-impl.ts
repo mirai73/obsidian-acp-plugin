@@ -30,6 +30,7 @@ import {
 	InitializeResult,
 } from '../types/acp';
 import { logger } from './logging-system';
+import { builtinExtensions } from '../extensions';
 
 export interface ACPClientOptions {
 	healthCheckInterval?: number;
@@ -202,7 +203,7 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 			jsonRpcClient.setTransport(transport);
 
 			// Register method handlers
-			this.registerMethodHandlers(jsonRpcClient);
+			this.registerMethodHandlers(jsonRpcClient, config);
 
 			// Create connection record
 			const connection: AgentConnection = {
@@ -499,49 +500,6 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 		this.emit('session-update', params);
 	}
 
-	private handleKiroCommandsAvailable(params: any): void {
-		this.handleSessionUpdate({
-			sessionId: params.sessionId,
-			update: {
-				sessionUpdate: 'available_commands_update',
-				availableCommands: params.commands,
-			},
-		});
-	}
-
-	private handleKiroAgentSwitched(params: any): void {
-		this.handleSessionUpdate({
-			sessionId: params.sessionId,
-			update: {
-				sessionUpdate: 'current_mode_update',
-				modeId: params.agentName,
-			},
-		});
-	}
-
-	private handleKiroMetadata(params: any): void {
-		const { sessionId, ...metadata } = params;
-		this.handleSessionUpdate({
-			sessionId,
-			update: {
-				sessionUpdate: 'kiro_metadata_update',
-				metadata,
-			},
-		});
-	}
-
-	private handleKiroCompactionStatus(params: any): void {
-		this.handleSessionUpdate({
-			sessionId: params.sessionId,
-			update: {
-				sessionUpdate: 'kiro_compaction_update',
-				status: params.status,
-				freedTokens: params.freedTokens,
-				summary: params.summary,
-			},
-		});
-	}
-
 	/**
 	 * Register method handlers
 	 */
@@ -805,7 +763,10 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 	/**
 	 * Register JSON-RPC method handlers for a client
 	 */
-	private registerMethodHandlers(jsonRpcClient: JsonRpcClient): void {
+	private registerMethodHandlers(
+		jsonRpcClient: JsonRpcClient,
+		config: AgentConfig
+	): void {
 		// Register ACP method handlers
 		jsonRpcClient.registerMethod('fs/read_text_file', async (params) => {
 			try {
@@ -849,42 +810,17 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 			this.handleSessionUpdate(params);
 		});
 
-		jsonRpcClient.registerNotification(
-			'_kiro.dev/commands/available',
-			(params) => {
-				this.handleKiroCommandsAvailable(params);
+		const ctx = {
+			emitSessionUpdate: (sessionId: string, update: Record<string, any>) =>
+				this.handleSessionUpdate({ sessionId, update } as SessionUpdateParams),
+		};
+		for (const extension of builtinExtensions) {
+			if (!extension.matches(config)) continue;
+			for (const [method, handler] of Object.entries(extension.notifications)) {
+				jsonRpcClient.registerNotification(method, (params) =>
+					handler(params, ctx)
+				);
 			}
-		);
-
-		jsonRpcClient.registerNotification('_kiro.dev/agent/switched', (params) => {
-			this.handleKiroAgentSwitched(params);
-		});
-
-		jsonRpcClient.registerNotification('_kiro.dev/metadata', (params) => {
-			this.handleKiroMetadata(params);
-		});
-
-		jsonRpcClient.registerNotification(
-			'_kiro.dev/subagent/list_update',
-			(params) => {
-				for (const sub of params?.subagents ?? []) {
-					this.handleSessionUpdate({
-						sessionId: sub.sessionId,
-						update: {
-							sessionUpdate: 'kiro_subagent_update',
-							name: sub.sessionName,
-							status: sub.status?.type,
-						},
-					});
-				}
-			}
-		);
-
-		jsonRpcClient.registerNotification(
-			'_kiro.dev/compaction/status',
-			(params) => {
-				this.handleKiroCompactionStatus(params);
-			}
-		);
+		}
 	}
 }

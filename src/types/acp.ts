@@ -73,8 +73,19 @@ export interface SessionNewParams {
 	}>;
 }
 
+export interface SessionConfigOption {
+	id: string;
+	name: string;
+	description?: string;
+	category?: string;
+	type: string;
+	currentValue: string;
+	options: Array<{ value: string; name: string; description?: string }>;
+}
+
 export interface SessionNewResult {
 	sessionId: string;
+	configOptions?: SessionConfigOption[];
 	modes?: SessionModeState;
 	models?: {
 		currentModelId: string;
@@ -110,12 +121,23 @@ export interface SessionSetModelParams {
 export interface Message {
 	role: 'user' | 'assistant' | 'system';
 	content: ContentBlock[];
-	usedContext?: Array<{ label: string; path?: string; type: 'file' | 'folder' | 'selection' | 'document' }>;
+	usedContext?: Array<{
+		label: string;
+		path?: string;
+		type: 'file' | 'folder' | 'selection' | 'document';
+	}>;
 	timestamp?: number | string | Date;
 }
 
 export interface ContentBlock {
-	type: 'text' | 'image' | 'resource' | 'diff' | 'resource_link' | 'resource' | 'tool_call';
+	type:
+		| 'text'
+		| 'image'
+		| 'resource'
+		| 'diff'
+		| 'resource_link'
+		| 'resource'
+		| 'tool_call';
 	text?: string;
 	source?: string;
 	data?: string;

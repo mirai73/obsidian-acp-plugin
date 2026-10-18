@@ -2315,3 +2315,11 @@ body {
     display: none;
   }
 }
+
+.acp-spawned-tool {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.acp-spawned-tool::before {
+  content: "\2022  ";
+}

@@ -288,6 +288,12 @@ export class ObsidianFileOperationsHandler implements FileOperationsHandler {
 		// Convert backslashes to forward slashes
 		let normalized = filePath.replace(/\\/g, '/');
 
+		// Agents send absolute paths under the vault; make them vault-relative
+		const base = this.getVaultPath().replace(/\\/g, '/').replace(/\/+$/, '');
+		if (base && (normalized === base || normalized.startsWith(base + '/'))) {
+			normalized = normalized.slice(base.length);
+		}
+
 		// Remove leading slashes
 		normalized = normalized.replace(/^\/+/, '');
 

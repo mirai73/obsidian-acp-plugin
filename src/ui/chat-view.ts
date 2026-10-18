@@ -176,10 +176,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (!session) return;
 
 		this.messagesContainer.empty();
-		session.messages.forEach((msg: Message) => {
-			const displayMsg = this.cleanMessageForDisplay(msg);
-			this.displayMessage(displayMsg);
-		});
+		this.renderSessionContent(session);
 	}
 
 	getViewType(): string {
@@ -629,19 +626,8 @@ export class ChatView extends ItemView implements ChatInterface {
 				value.startsWith('/') &&
 				cursorPosition <= value.split('\n')[0].length
 			) {
-				const firstSpace = value.indexOf(' ');
-				if (firstSpace !== -1) {
-					const firstWord = value.substring(0, firstSpace).toLowerCase();
-					const isAgentCommand = this.agentCommands.some(
-						(cmd) => cmd.name.toLowerCase() === firstWord
-					);
-					if (isAgentCommand && this.currentSessionId && this.sessionManager) {
-						const commandName = firstWord.substring(1); // remove slash
-						const argQuery = value.substring(firstSpace + 1);
-						this.showArgumentDropdown(commandName, argQuery);
-					} else {
-						this.hideCommandDropdown();
-					}
+				if (value.includes(' ')) {
+					this.hideCommandDropdown();
 				} else {
 					const query = value.substring(1).toLowerCase();
 					this.showCommandDropdown(query);
@@ -1007,6 +993,26 @@ export class ChatView extends ItemView implements ChatInterface {
 		return details;
 	}
 
+	/** Render a session's messages with its spawned agent blocks placed where they were spawned. */
+	private renderSessionContent(session: SessionContext): void {
+		this.spawnedBlocks.clear();
+		const pending = Array.from(session.spawnedAgents ?? []);
+		const drawDue = (index: number) => {
+			while (pending.length > 0 && pending[0][1].anchor <= index) {
+				const [taskId, agent] = pending.shift()!;
+				this.updateSpawnedStatus(taskId, agent.name, agent.status ?? 'working');
+				for (const entry of agent.entries) {
+					this.appendSpawnedChunk(taskId, entry.kind, entry.text);
+				}
+			}
+		};
+		session.messages.forEach((msg: Message, i: number) => {
+			drawDue(i);
+			this.displayMessage(this.cleanMessageForDisplay(msg));
+		});
+		drawDue(Infinity);
+	}
+
 	/** Update a spawned agent block from a subagent list update; collapses it once finished. */
 	private updateSpawnedStatus(
 		spawnedId: string,
@@ -1023,7 +1029,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		const label = name || spawnedId.slice(0, 8);
 		const summary = details.querySelector('summary');
 		if (summary) {
-			summary.textContent = `Spawned agent: ${label}${finished ? ` (${status})` : ''}`;
+			summary.textContent = `Spawned agent: ${label} (${finished ? status : 'working'})`;
 		}
 		details.toggleClass('is-finished', finished);
 		if (finished) details.open = false;
@@ -1032,7 +1038,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	/** Render output of an agent spawned by the main agent in its own collapsible block. */
 	private appendSpawnedChunk(
 		spawnedId: string,
-		kind: 'message' | 'thought',
+		kind: 'message' | 'thought' | 'tool',
 		text: string
 	): void {
 		if (!this.messagesContainer) return;
@@ -1041,8 +1047,12 @@ export class ChatView extends ItemView implements ChatInterface {
 		) as HTMLElement;
 		const last = body.lastElementChild as HTMLElement | null;
 		const cls =
-			kind === 'thought' ? 'acp-spawned-thought' : 'acp-spawned-message';
-		if (last && last.hasClass(cls)) {
+			kind === 'thought'
+				? 'acp-spawned-thought'
+				: kind === 'tool'
+					? 'acp-spawned-tool'
+					: 'acp-spawned-message';
+		if (kind !== 'tool' && last && last.hasClass(cls)) {
 			last.textContent = (last.textContent || '') + text;
 		} else {
 			body.createDiv({ cls, text });
@@ -1052,12 +1062,14 @@ export class ChatView extends ItemView implements ChatInterface {
 	}
 
 	private handleStreamingChunk(sessionId: string, chunk: any): void {
-		if (chunk?.type === 'spawned') {
-			this.appendSpawnedChunk(sessionId, chunk.kind, chunk.text);
-			return;
-		}
-		if (chunk?.type === 'spawned_status') {
-			this.updateSpawnedStatus(sessionId, chunk.name, chunk.status);
+		if (chunk?.type === 'spawned' || chunk?.type === 'spawned_status') {
+			// Only render in the conversation that spawned the agent
+			if (sessionId !== this.currentSessionId) return;
+			if (chunk.type === 'spawned') {
+				this.appendSpawnedChunk(chunk.taskId, chunk.kind, chunk.text);
+			} else {
+				this.updateSpawnedStatus(chunk.taskId, chunk.name, chunk.status);
+			}
 			return;
 		}
 		if (!chunk) return;
@@ -1080,34 +1092,31 @@ export class ChatView extends ItemView implements ChatInterface {
 			return;
 		}
 
-		if (chunk.type === 'kiro_compaction') {
-			if (chunk.status === 'compacting') {
-				this.displayMessage({
-					role: 'system',
-					content: [
-						{
-							type: 'text',
-							text: '⚡ Compacting conversation context to free up tokens...',
-						},
-					],
-				});
-			} else if (chunk.status === 'completed') {
-				this.displayMessage({
-					role: 'system',
-					content: [
-						{
-							type: 'text',
-							text: `✅ Compaction completed. Freed ${chunk.freedTokens || 0} tokens. Summary: ${chunk.summary || 'N/A'}`,
-						},
-					],
-				});
+		if (chunk.type === 'mode') {
+			this.currentModeId = chunk.modeId;
+			this.updateModeSelector();
+			return;
+		}
+
+		if (chunk.type === 'config_options') {
+			if (chunk.modes) {
+				this.availableModes = chunk.modes.availableModes;
+				this.currentModeId = chunk.modes.currentModeId;
+				this.updateModeSelector();
+			}
+			if (chunk.models) {
+				this.availableModels = chunk.models.availableModels || [];
+				this.currentModelId = chunk.models.currentModelId;
+				this.updateModelSelector();
 			}
 			return;
 		}
 
-		if (chunk.type === 'mode') {
-			this.currentModeId = chunk.modeId;
-			this.updateModeSelector();
+		if (chunk.type === 'display_error') {
+			this.displayMessage({
+				role: 'system',
+				content: [{ type: 'text', text: chunk.message }],
+			});
 			return;
 		}
 
@@ -1680,11 +1689,8 @@ export class ChatView extends ItemView implements ChatInterface {
 		params: SessionRequestPermissionParams,
 		wrappedResolve: (id: string | null) => void
 	): void {
-		// Known background sessions render when switched to; spawned agents have no session of their own, so show now.
-		const isKnownSession = !!this.sessionManager?.getSessionInfo(
-			params.sessionId
-		);
-		if (params.sessionId !== this.currentSessionId && isKnownSession) {
+		// Requests for another conversation render when the user switches to it.
+		if (params.sessionId !== this.currentSessionId) {
 			return;
 		}
 
@@ -2553,43 +2559,6 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
-	private async showArgumentDropdown(
-		command: string,
-		query: string
-	): Promise<void> {
-		if (!this.commandDropdown || !this.currentSessionId || !this.sessionManager)
-			return;
-
-		try {
-			const options = await this.sessionManager.getCommandOptions(
-				this.currentSessionId,
-				command,
-				query
-			);
-
-			if (options.length === 0) {
-				this.hideCommandDropdown();
-				return;
-			}
-
-			// Format options as AcpCommand objects for the existing renderer
-			this.filteredCommands = options.map((opt) => ({
-				name: opt.value,
-				description: opt.label,
-				isArgumentOption: true,
-				commandPrefix: `/${command} `,
-			}));
-
-			this.renderCommandList(this.filteredCommands);
-			this.commandDropdown.style.display = 'block';
-			this.selectedCommandIndex = 0;
-			this.highlightSelectedCommand();
-		} catch (err) {
-			console.warn('Failed to display argument dropdown:', err);
-			this.hideCommandDropdown();
-		}
-	}
-
 	private renderCommandList(commands: AcpCommand[]): void {
 		if (!this.commandDropdown) return;
 
@@ -2599,14 +2568,6 @@ export class ChatView extends ItemView implements ChatInterface {
 
 			const text = item.createSpan('acp-dropdown-text');
 			text.textContent = action.name || '';
-
-			if (action.description) {
-				const cmdHint = item.createSpan('acp-dropdown-hint');
-				cmdHint.textContent = action.description;
-				cmdHint.style.marginLeft = 'auto';
-				cmdHint.style.opacity = '0.5';
-				cmdHint.style.fontSize = '0.8em';
-			}
 
 			item.addEventListener('click', (e) => {
 				e.stopPropagation();
@@ -2644,9 +2605,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	}
 
 	private selectCommand(action: any): void {
-		if (action.isArgumentOption) {
-			this.inputField.value = action.commandPrefix + action.name + ' ';
-		} else if (action.name) {
+		if (action.name) {
 			this.inputField.value = action.name + ' ';
 		}
 		this.autoResizeTextarea();
@@ -2893,10 +2852,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		// Re-render all messages from session
-		session.messages.forEach((msg: Message) => {
-			const displayMsg = this.cleanMessageForDisplay(msg);
-			this.displayMessage(displayMsg);
-		});
+		this.renderSessionContent(session);
 
 		// Re-render any pending permission requests for this session
 		for (const [toolCallId, params] of this.pendingPermissionParams.entries()) {

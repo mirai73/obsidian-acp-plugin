@@ -44,6 +44,20 @@ export interface SessionContext {
 	pendingOperations: Set<string>;
 	modes?: SessionModeState;
 	models?: SessionNewResult['models'];
+	/** Set when the agent exposes mode/model via session config options instead of set_mode/set_model. */
+	modeConfigId?: string;
+	modelConfigId?: string;
+	/** Agents spawned during this session, kept in memory so the UI can redraw them. */
+	spawnedAgents?: Map<
+		string,
+		{
+			name?: string;
+			status?: string;
+			/** Index in `messages` where the agent was spawned; it renders before that message. */
+			anchor: number;
+			entries: Array<{ kind: 'message' | 'thought' | 'tool'; text: string }>;
+		}
+	>;
 	toolCalls?: Map<string, ToolCall>;
 	availableCommands?: AvailableCommand[];
 	isDocumentAddedToContext?: boolean;
@@ -67,6 +81,8 @@ export interface SessionContext {
  */
 export class SessionManagerImpl implements SessionManager {
 	private sessions: Map<string, SessionContext> = new Map();
+	/** Updates that arrive before the session/new response (e.g. V3 commands); replayed once the session exists. */
+	private earlyUpdates: Map<string, any[]> = new Map();
 	private options: SessionManagerOptions;
 	private cleanupInterval: NodeJS.Timeout | null = null;
 	private pendingTimeouts: Set<NodeJS.Timeout> = new Set();
@@ -140,10 +156,12 @@ export class SessionManagerImpl implements SessionManager {
 				models: result.models,
 				toolCalls: new Map(),
 				cwd: cwd || process.cwd(),
+				...this.stateFromConfigOptions(result),
 			};
 
 			// Store session using the agent's session ID
 			this.sessions.set(result.sessionId, sessionContext);
+			this.flushEarlyUpdates(result.sessionId);
 
 			return { sessionId: result.sessionId };
 		} catch (error) {
@@ -284,82 +302,6 @@ export class SessionManagerImpl implements SessionManager {
 	}
 
 	/**
-	 * Execute a Kiro custom slash command
-	 */
-	async executeAgentCommand(
-		sessionId: string,
-		command: string,
-		args: string
-	): Promise<string> {
-		const session = this.getSession(sessionId);
-
-		if (!session.jsonRpcClient) {
-			throw new Error('No JSON-RPC client configured for session');
-		}
-
-		session.lastActivity = new Date();
-
-		try {
-			const params = {
-				sessionId,
-				command,
-				arguments: args,
-			};
-
-			const result = await session.jsonRpcClient.sendRequest(
-				'_kiro.dev/commands/execute',
-				params
-			);
-
-			// Persist session if state might have changed
-			await this.persistSession(session);
-
-			return result?.output || 'Command executed successfully';
-		} catch (error) {
-			if (error instanceof JsonRpcError) {
-				throw error;
-			}
-			throw new JsonRpcError(
-				JsonRpcErrorCode.INTERNAL_ERROR,
-				`Failed to execute agent command: ${error.message || 'Unknown error'}`
-			);
-		}
-	}
-
-	/**
-	 * Get auto-completion options for a command from the agent
-	 */
-	async getCommandOptions(
-		sessionId: string,
-		command: string,
-		query: string
-	): Promise<Array<{ value: string; label: string }>> {
-		const session = this.getSession(sessionId);
-
-		if (!session.jsonRpcClient) {
-			throw new Error('No JSON-RPC client configured for session');
-		}
-
-		try {
-			const params = {
-				sessionId,
-				command,
-				query,
-			};
-
-			const result = await session.jsonRpcClient.sendRequest(
-				'_kiro.dev/commands/options',
-				params
-			);
-
-			return result?.options || [];
-		} catch (error) {
-			console.warn('Failed to fetch command options from agent:', error);
-			return [];
-		}
-	}
-
-	/**
 	 * Update session with status or message updates
 	 */
 	updateSession(sessionId: string, update: SessionUpdate): void {
@@ -396,6 +338,13 @@ export class SessionManagerImpl implements SessionManager {
 		}
 	}
 
+	private flushEarlyUpdates(sessionId: string): void {
+		const buffered = this.earlyUpdates.get(sessionId);
+		if (!buffered) return;
+		this.earlyUpdates.delete(sessionId);
+		for (const params of buffered) this.handleStreamingUpdate(params);
+	}
+
 	/**
 	 * Handle streaming updates from session/update notifications
 	 */
@@ -409,35 +358,12 @@ export class SessionManagerImpl implements SessionManager {
 		const session = this.sessions.get(sessionId);
 
 		if (!session) {
-			if (
-				update?.sessionUpdate === 'kiro_subagent_update' &&
-				this.options.onStreamingChunk
-			) {
-				this.options.onStreamingChunk(sessionId, {
-					type: 'spawned_status',
-					name: update.name,
-					status: update.status,
-				});
-				return;
-			}
-			// Sessions we didn't create belong to agents spawned by the agent itself
-			const kind =
-				update?.sessionUpdate === 'agent_message_chunk'
-					? 'message'
-					: update?.sessionUpdate === 'agent_thought_chunk'
-						? 'thought'
-						: null;
-			if (
-				kind &&
-				update.content?.type === 'text' &&
-				update.content.text &&
-				this.options.onStreamingChunk
-			) {
-				this.options.onStreamingChunk(sessionId, {
-					type: 'spawned',
-					kind,
-					text: update.content.text,
-				});
+			const buffered = this.earlyUpdates.get(sessionId) ?? [];
+			if (buffered.length < 500) buffered.push(params);
+			this.earlyUpdates.set(sessionId, buffered);
+			// Bound memory if the session never materializes
+			if (this.earlyUpdates.size > 20) {
+				this.earlyUpdates.delete(this.earlyUpdates.keys().next().value!);
 			}
 			return;
 		}
@@ -459,6 +385,41 @@ export class SessionManagerImpl implements SessionManager {
 			return;
 		}
 
+		// CLI V3 runs subagents inside the parent session, tagging their updates with agentSubtaskId.
+		const taskId = update?._meta?.kiro?.agentSubtaskId;
+		if (taskId) {
+			const su = update.sessionUpdate;
+			if (
+				(su === 'agent_thought_chunk' || su === 'agent_message_chunk') &&
+				update.content?.type === 'text' &&
+				update.content.text
+			) {
+				this.notifySpawned(sessionId, {
+					type: 'spawned',
+					taskId,
+					kind: su === 'agent_thought_chunk' ? 'thought' : 'message',
+					text: update.content.text,
+				});
+			} else if (
+				(su === 'tool_call' || su === 'tool_call_update') &&
+				update._meta.kiro.kind === 'agent-subtask'
+			) {
+				this.notifySpawned(sessionId, {
+					type: 'spawned_status',
+					taskId,
+					name: update.title?.replace(/^Sub-agent:\s*/, ''),
+					status: update.status,
+				});
+			} else if (su === 'tool_call' && update.title) {
+				this.notifySpawned(sessionId, {
+					type: 'spawned',
+					taskId,
+					kind: 'tool',
+					text: update.title,
+				});
+			}
+			return;
+		}
 		// Handle agent_message_chunk for streaming responses
 		if (
 			update &&
@@ -640,23 +601,72 @@ export class SessionManagerImpl implements SessionManager {
 				});
 			}
 			console.debug('Received available commands for session:', sessionId);
-		} else if (update && update.sessionUpdate === 'kiro_metadata_update') {
-			session.kiroMetadata = update.metadata;
+		} else if (update && update.sessionUpdate === 'config_option_update') {
+			const state = this.stateFromConfigOptions({
+				sessionId,
+				configOptions: update.configOptions,
+			});
+			Object.assign(session, state);
+			if (this.options.onStreamingChunk) {
+				this.options.onStreamingChunk(sessionId, {
+					type: 'config_options',
+					modes: session.modes,
+					models: session.models,
+				});
+			}
+		} else if (
+			update &&
+			update.sessionUpdate === 'session_info_update' &&
+			update._meta?.kiro?.kind === 'context_usage'
+		) {
+			const usage = update._meta.kiro.usagePercentage ?? update.usagePercentage;
+			if (usage !== undefined) {
+				session.kiroMetadata = {
+					...session.kiroMetadata,
+					contextUsagePercentage: usage,
+				};
+				if (this.options.onStreamingChunk) {
+					this.options.onStreamingChunk(sessionId, {
+						type: 'kiro_metadata',
+						metadata: session.kiroMetadata,
+					});
+				}
+			}
+		} else if (
+			update &&
+			update.sessionUpdate === 'session_info_update' &&
+			update._meta?.kiro?.kind === 'turn_completion'
+		) {
+			const kiro = update._meta.kiro;
+			session.kiroMetadata = {
+				...session.kiroMetadata,
+				meteringUsage: (kiro.promptTurnSummaries ?? []).map((s: any) => ({
+					unit: s.unit,
+					unitPlural: s.unitPlural,
+					value: s.usage,
+				})),
+				turnDurationMs: kiro.elapsedTime,
+			};
 			if (this.options.onStreamingChunk) {
 				this.options.onStreamingChunk(sessionId, {
 					type: 'kiro_metadata',
-					metadata: update.metadata,
+					metadata: session.kiroMetadata,
 				});
 			}
-		} else if (update && update.sessionUpdate === 'kiro_compaction_update') {
+		} else if (
+			update &&
+			update.sessionUpdate === 'session_info_update' &&
+			update._meta?.kiro?.kind === 'display_error'
+		) {
 			if (this.options.onStreamingChunk) {
 				this.options.onStreamingChunk(sessionId, {
-					type: 'kiro_compaction',
-					status: update.status,
-					freedTokens: update.freedTokens,
-					summary: update.summary,
+					type: 'display_error',
+					message: update._meta.kiro.message,
 				});
 			}
+		} else if (update && update.sessionUpdate === 'session_info_update') {
+			// Other V3 lifecycle kinds (focus, turn_start/end, ...) need no handling
+			console.debug('session_info_update:', update._meta?.kiro?.kind);
 		} else {
 			// Handle other types of session updates
 			console.log('Received session update:', {
@@ -871,6 +881,7 @@ export class SessionManagerImpl implements SessionManager {
 			persistedId: record.id,
 			title: record.title,
 			cwd: resolvedCwd,
+			...this.stateFromConfigOptions(result),
 		};
 
 		// Populate toolCalls map from the loaded messages
@@ -887,6 +898,7 @@ export class SessionManagerImpl implements SessionManager {
 		}
 
 		this.sessions.set(result.sessionId, sessionContext);
+		this.flushEarlyUpdates(result.sessionId);
 		return result.sessionId;
 	}
 
@@ -928,6 +940,107 @@ export class SessionManagerImpl implements SessionManager {
 		}
 	}
 
+	/** Store spawned-agent state on the parent session so it survives conversation switches, then notify the UI. */
+	private notifySpawned(
+		parentId: string,
+		chunk: {
+			type: 'spawned' | 'spawned_status';
+			taskId: string;
+			kind?: 'message' | 'thought' | 'tool';
+			text?: string;
+			name?: string;
+			status?: string;
+		}
+	): void {
+		const session = this.sessions.get(parentId);
+		if (session) {
+			session.spawnedAgents ??= new Map();
+			const agent = session.spawnedAgents.get(chunk.taskId) ?? {
+				anchor: session.messages.length,
+				entries: [],
+			};
+			if (chunk.name) agent.name = chunk.name;
+			if (chunk.status) agent.status = chunk.status;
+			if (chunk.kind && chunk.text) {
+				const last = agent.entries[agent.entries.length - 1];
+				if (last && last.kind === chunk.kind && chunk.kind !== 'tool') {
+					last.text += chunk.text;
+				} else {
+					agent.entries.push({ kind: chunk.kind, text: chunk.text });
+				}
+			}
+			session.spawnedAgents.set(chunk.taskId, agent);
+		}
+		this.options.onStreamingChunk?.(parentId, chunk);
+	}
+
+	/**
+	 * Derive modes/models from `configOptions` when the agent doesn't return the legacy fields.
+	 */
+	private stateFromConfigOptions(
+		result: SessionNewResult
+	): Pick<
+		SessionContext,
+		'modes' | 'models' | 'modeConfigId' | 'modelConfigId'
+	> {
+		const options = (result.configOptions ?? []).filter(
+			(o) => o.type === 'select'
+		);
+		const out: Pick<
+			SessionContext,
+			'modes' | 'models' | 'modeConfigId' | 'modelConfigId'
+		> = {};
+
+		const modeOpt = options.find((o) => o.category === 'mode');
+		if (modeOpt) {
+			out.modeConfigId = modeOpt.id;
+			if (!result.modes) {
+				out.modes = {
+					currentModeId: modeOpt.currentValue,
+					availableModes: modeOpt.options.map((v) => ({
+						id: v.value,
+						name: v.name,
+						description: v.description,
+					})),
+				};
+			}
+		}
+
+		const modelOpt = options.find((o) => o.category === 'model');
+		if (modelOpt) {
+			out.modelConfigId = modelOpt.id;
+			if (!result.models) {
+				out.models = {
+					currentModelId: modelOpt.currentValue,
+					availableModels: modelOpt.options.map((v) => ({
+						modelId: v.value,
+						name: v.name,
+						description: v.description ?? '',
+					})),
+				};
+			}
+		}
+		return out;
+	}
+
+	/** Uses session/set_config_option when the agent exposes the setting that way. */
+	private async sendModelChange(
+		session: SessionContext,
+		sessionId: string,
+		modelId: string
+	): Promise<void> {
+		if (session.modelConfigId) {
+			await session.jsonRpcClient.sendRequest('session/set_config_option', {
+				sessionId,
+				configId: session.modelConfigId,
+				value: modelId,
+			});
+		} else {
+			const params: SessionSetModelParams = { sessionId, modelId };
+			await session.jsonRpcClient.sendRequest('session/set_model', params);
+		}
+	}
+
 	/**
 	 * Set the current mode for a session
 	 */
@@ -946,7 +1059,15 @@ export class SessionManagerImpl implements SessionManager {
 				sessionId,
 				modeId,
 			};
-			await session.jsonRpcClient.sendRequest('session/set_mode', params);
+			if (session.modeConfigId) {
+				await session.jsonRpcClient.sendRequest('session/set_config_option', {
+					sessionId,
+					configId: session.modeConfigId,
+					value: modeId,
+				});
+			} else {
+				await session.jsonRpcClient.sendRequest('session/set_mode', params);
+			}
 
 			if (session.modes) {
 				session.modes.currentModeId = modeId;
@@ -975,11 +1096,7 @@ export class SessionManagerImpl implements SessionManager {
 		}
 
 		try {
-			const params: SessionSetModelParams = {
-				sessionId,
-				modelId,
-			};
-			await session.jsonRpcClient.sendRequest('session/set_model', params);
+			await this.sendModelChange(session, sessionId, modelId);
 
 			if (session.models) {
 				session.models.currentModelId = modelId;
@@ -1162,10 +1279,11 @@ export class SessionManagerImpl implements SessionManager {
 			try {
 				if (session.models?.currentModelId) {
 					try {
-						await session.jsonRpcClient.sendRequest('session/set_model', {
-							sessionId: tempSessionId,
-							modelId: session.models.currentModelId,
-						});
+						await this.sendModelChange(
+							session,
+							tempSessionId,
+							session.models.currentModelId
+						);
 					} catch (modelErr) {
 						console.warn('Failed to set model on temporary session:', modelErr);
 					}
