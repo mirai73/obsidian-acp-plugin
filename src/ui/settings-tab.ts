@@ -10,6 +10,7 @@ import {
 import type ACPChatPlugin from '../../main';
 import { AgentConfig, DEFAULT_SETTINGS } from '../types/plugin';
 import { ObsidianFileOperationsHandler } from '../core/obsidian-file-operations';
+import { isAbsolutePath } from '../utils/external-paths';
 
 export class ACPChatSettingTab extends PluginSettingTab {
 	plugin: ACPChatPlugin;
@@ -158,6 +159,13 @@ export class ACPChatSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						});
 					});
+				},
+			},
+			{
+				name: 'Absolute Allowed Paths',
+				desc: 'Absolute folders/files (starting with /) outside the vault the agent may access, one per line. Leave empty to block all access outside the vault.',
+				render: (setting: Setting) => {
+					this.renderAbsolutePathsSetting(setting);
 				},
 			},
 			{
@@ -528,6 +536,32 @@ export class ACPChatSettingTab extends PluginSettingTab {
 		});
 	}
 
+	private renderAbsolutePathsSetting(setting: Setting): void {
+		setting.addTextArea((text) => {
+			text.setValue(
+				this.plugin.settings.permissions?.absoluteAllowedPaths?.join('\n') ||
+					''
+			);
+			text.setPlaceholder(
+				'One absolute path per line\nExample:\n/Users/me/projects/notes\n/tmp/output.txt'
+			);
+			text.onChange(async (value) => {
+				const paths = value
+					.split('\n')
+					.map((p) => p.trim())
+					.filter((p) => p.length > 0);
+				const absolutePaths = paths.filter(isAbsolutePath);
+				await this.setControlValue(
+					'permissions.absoluteAllowedPaths',
+					absolutePaths
+				);
+				if (absolutePaths.length !== paths.length) {
+					new Notice('Absolute paths must start with /');
+				}
+			});
+		});
+	}
+
 	private displayPermissionConfiguration(group: SettingGroup): void {
 		group.addSetting((setting) =>
 			setting
@@ -615,6 +649,15 @@ export class ACPChatSettingTab extends PluginSettingTab {
 					});
 				})
 		);
+
+		group.addSetting((setting) => {
+			setting
+				.setName('Absolute Allowed Paths')
+				.setDesc(
+					'Absolute folders/files (starting with /) outside the vault the agent may access, one per line. Leave empty to block all access outside the vault.'
+				);
+			this.renderAbsolutePathsSetting(setting);
+		});
 
 		// Read-only paths configuration
 		group.addSetting((setting) =>

@@ -1,5 +1,11 @@
 import { PermissionManager } from '../interfaces/permission-manager';
 import {
+  ExternalAccessConfig,
+  isAbsolutePath,
+  isExternalPathAllowed,
+  isPathInside,
+} from '../utils/external-paths';
+import {
   SessionRequestPermissionParams,
   SessionRequestPermissionResult,
 } from '../types/acp';
@@ -10,6 +16,9 @@ export interface PermissionConfig {
   deniedPaths: string[];
   requireConfirmation: boolean;
   logOperations: boolean;
+  /** Vault root; absolute resources outside it need external access. */
+  vaultPath?: string;
+  external?: ExternalAccessConfig;
 }
 
 export interface PermissionEntry {
@@ -58,8 +67,17 @@ export class PermissionManagerImpl implements PermissionManager {
       params.toolCall.resource ||
       'unknown';
 
-    // Denied paths take precedence
-    if (this.isResourceDenied(resource)) {
+    // Absolute paths outside the vault are governed only by the external settings
+    if (this.isExternalResource(resource)) {
+      const allowed = isExternalPathAllowed(
+        resource,
+        this.config.external ?? { absoluteAllowedPaths: [] }
+      );
+      if (!allowed) {
+        this.logOperation(operation, resource, false);
+        return { outcome: { outcome: 'cancelled' } };
+      }
+    } else if (this.isResourceDenied(resource)) {
       this.logOperation(operation, resource, false);
       return { outcome: { outcome: 'cancelled' } };
     }
@@ -71,7 +89,10 @@ export class PermissionManagerImpl implements PermissionManager {
     }
 
     // Check if it's allowed
-    if (!this.isResourceAllowed(resource)) {
+    if (
+      !this.isExternalResource(resource) &&
+      !this.isResourceAllowed(resource)
+    ) {
       this.logOperation(operation, resource, false);
       return { outcome: { outcome: 'cancelled' } };
     }
@@ -172,6 +193,13 @@ export class PermissionManagerImpl implements PermissionManager {
   }
 
   // Private helper methods
+
+  private isExternalResource(resource: string): boolean {
+    const vault = this.config.vaultPath;
+    return (
+      !!vault && isAbsolutePath(resource) && !isPathInside(vault, resource)
+    );
+  }
 
   private isResourceAllowed(resource: string): boolean {
     // If no allowed paths configured, allow all

@@ -25,6 +25,7 @@ export default class ACPChatPlugin extends Plugin {
 	private chatView: ChatView | null = null;
 	private statusBarItem: HTMLElement | null = null;
 	fileOperationsHandler: ObsidianFileOperationsHandler;
+	private permissionManager?: PermissionManagerImpl;
 
 	async onload() {
 		// Official Kiro mark from kiro.dev/icon.svg, usable as agent icon id "kiro".
@@ -62,6 +63,7 @@ export default class ACPChatPlugin extends Plugin {
 			trackChanges: true,
 			showNotifications:
 				this.settings.ui?.showFileOperationNotifications ?? false,
+			getExternalAccess: () => this.getExternalAccess(),
 		});
 
 		// Initialize ACP client with reasonable timeout
@@ -106,19 +108,13 @@ export default class ACPChatPlugin extends Plugin {
 
 		// Set up permission handler
 		const permissionManager = new PermissionManagerImpl(
-			{
-				allowedPaths: this.settings.permissions?.allowedPaths || [],
-				readOnlyPaths: this.settings.permissions?.readOnlyPaths || [],
-				deniedPaths: this.settings.permissions?.deniedPaths || [],
-				requireConfirmation:
-					this.settings.permissions?.requireConfirmation ?? true,
-				logOperations: this.settings.permissions?.logOperations ?? true,
-			},
+			this.buildPermissionConfig(),
 			async (params) => {
 				return await this.userConfirmationHandler(params);
 			}
 		);
 
+		this.permissionManager = permissionManager;
 		const acpSessionHandlers = new ACPSessionHandlers(permissionManager);
 
 		this.acpClient.setSessionRequestPermissionHandler(async (params) => {
@@ -558,7 +554,29 @@ export default class ACPChatPlugin extends Plugin {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
 
+	getExternalAccess() {
+		const perms = this.settings.permissions;
+		return {
+			absoluteAllowedPaths: perms?.absoluteAllowedPaths ?? [],
+		};
+	}
+
+	private buildPermissionConfig() {
+		const perms = this.settings.permissions;
+		return {
+			allowedPaths: perms?.allowedPaths || [],
+			readOnlyPaths: perms?.readOnlyPaths || [],
+			deniedPaths: perms?.deniedPaths || [],
+			requireConfirmation: perms?.requireConfirmation ?? true,
+			logOperations: perms?.logOperations ?? true,
+			// @ts-ignore
+			vaultPath: this.app.vault.adapter.basePath as string | undefined,
+			external: this.getExternalAccess(),
+		};
+	}
+
 	async saveSettings() {
 		await this.saveData(this.settings);
+		this.permissionManager?.updateConfig(this.buildPermissionConfig());
 	}
 }

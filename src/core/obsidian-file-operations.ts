@@ -4,13 +4,23 @@
  */
 
 import { App, TFile, TFolder, Vault, Notice } from 'obsidian';
+import { promises as fsp } from 'fs';
+import * as nodePath from 'path';
 import { FileOperationsHandler } from '../interfaces/file-operations';
+import {
+	ExternalAccessConfig,
+	isAbsolutePath,
+	isExternalPathAllowed,
+	isPathInside,
+} from '../utils/external-paths';
 
 export interface ObsidianFileOperationsConfig {
 	app: App;
 	enableUndoRedo?: boolean;
 	trackChanges?: boolean;
 	showNotifications?: boolean;
+	/** Returns the current external (outside-vault) access settings. */
+	getExternalAccess?: () => ExternalAccessConfig;
 }
 
 /**
@@ -23,6 +33,7 @@ export class ObsidianFileOperationsHandler implements FileOperationsHandler {
 	private trackChanges: boolean;
 	private showNotifications: boolean;
 	private changeHistory: Map<string, FileChangeRecord[]> = new Map();
+	private getExternalAccess?: () => ExternalAccessConfig;
 
 	constructor(config: ObsidianFileOperationsConfig) {
 		this.app = config.app;
@@ -30,6 +41,29 @@ export class ObsidianFileOperationsHandler implements FileOperationsHandler {
 		this.enableUndoRedo = config.enableUndoRedo ?? true;
 		this.trackChanges = config.trackChanges ?? true;
 		this.showNotifications = config.showNotifications ?? false;
+		this.getExternalAccess = config.getExternalAccess;
+	}
+
+	/**
+	 * Returns the resolved absolute path if `filePath` targets a location outside
+	 * the vault, null if it is vault-relative/inside the vault. Throws when the
+	 * external location is not permitted.
+	 */
+	private resolveExternalPath(filePath: string): string | null {
+		if (!isAbsolutePath(filePath)) {
+			return null;
+		}
+		const base = this.getVaultPath();
+		if (base && isPathInside(base, filePath)) {
+			return null;
+		}
+		const access = this.getExternalAccess?.();
+		if (!access || !isExternalPathAllowed(filePath, access)) {
+			throw new Error(
+				`Path is outside the vault and not in the allowed absolute paths: ${filePath}`
+			);
+		}
+		return nodePath.resolve(filePath);
 	}
 
 	setShowNotifications(show: boolean): void {
@@ -43,6 +77,14 @@ export class ObsidianFileOperationsHandler implements FileOperationsHandler {
 		filePath: string
 	): Promise<{ content: string; encoding?: string }> {
 		try {
+			const externalPath = this.resolveExternalPath(filePath);
+			if (externalPath) {
+				return {
+					content: await fsp.readFile(externalPath, 'utf8'),
+					encoding: 'utf8',
+				};
+			}
+
 			// Normalize path for Obsidian
 			const normalizedPath = this.normalizePath(filePath);
 
@@ -84,6 +126,16 @@ export class ObsidianFileOperationsHandler implements FileOperationsHandler {
 		encoding?: string
 	): Promise<void> {
 		try {
+			const externalPath = this.resolveExternalPath(filePath);
+			if (externalPath) {
+				await fsp.mkdir(nodePath.dirname(externalPath), { recursive: true });
+				await fsp.writeFile(externalPath, content, 'utf8');
+				if (this.showNotifications) {
+					new Notice(`Wrote external file: ${externalPath}`);
+				}
+				return;
+			}
+
 			const normalizedPath = this.normalizePath(filePath);
 			const file = this.vault.getAbstractFileByPath(normalizedPath);
 

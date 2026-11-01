@@ -88,6 +88,8 @@ export interface AgentConfig {
 
 export interface PermissionConfig {
 	allowedPaths: string[];
+	/** Absolute paths (starting with "/") outside the vault the agent may access; empty means none. */
+	absoluteAllowedPaths: string[];
 	deniedPaths: string[];
 	readOnlyPaths: string[];
 	requireConfirmation: boolean;
@@ -121,6 +123,7 @@ export const DEFAULT_SETTINGS: Partial<PluginSettings> = {
 	defaultAgentId: null,
 	permissions: {
 		allowedPaths: [],
+		absoluteAllowedPaths: [],
 		deniedPaths: [],
 		readOnlyPaths: [],
 		requireConfirmation: true,
