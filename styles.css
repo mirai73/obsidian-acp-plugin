@@ -920,9 +920,53 @@ body {
 .acp-message-system {
   background: var(--acp-chat-system-bg);
   align-self: center;
-  max-width: 70%;
+  width: fit-content;
+  max-width: 90%;
+  padding: var(--size-2-2) var(--size-4-2);
+  gap: var(--size-2-1);
+  font-size: 0.9em;
   font-style: italic;
   border-left: 3px solid var(--acp-warning-color);
+}
+
+.acp-chat-notification {
+  display: flex;
+  align-items: flex-start;
+  align-self: center;
+  gap: var(--size-2-2);
+  width: fit-content;
+  max-width: 90%;
+  margin: 4px 0;
+  padding: var(--size-2-2) var(--size-2-3);
+  color: var(--text-normal);
+  background: var(--acp-chat-system-bg);
+  border: 1px solid var(--acp-glass-border);
+  border-left: 3px solid var(--acp-warning-color);
+  border-radius: var(--acp-radius-medium);
+  font-size: 0.9em;
+  line-height: var(--line-height-normal);
+  box-shadow: var(--acp-shadow-light);
+}
+
+.acp-chat-notification-message {
+  min-width: 0;
+}
+
+.acp-chat-notification-dismiss {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.acp-chat-notification-dismiss:hover {
+  color: var(--text-normal);
 }
 
 /* Compact Permission Request Timeline Styles */

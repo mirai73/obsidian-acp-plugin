@@ -706,14 +706,26 @@ export class ChatView extends ItemView implements ChatInterface {
 				path: this.sessionDocumentFile.path,
 				type: 'document',
 			});
+			// Embedded resources use the vault's absolute path so agents receive
+			// the document contents instead of needing to resolve a UI-only link.
+			const vaultPath =
+				(this.app.vault.adapter as { basePath?: string }).basePath ?? '';
+			const documentPath = vaultPath
+				? `${vaultPath.replace(/[\\/]$/, '')}/${this.sessionDocumentFile.path}`
+				: this.sessionDocumentFile.path;
+			const documentUri = `file://${encodeURI(documentPath)}`;
+			const documentContent = await this.app.vault.read(
+				this.sessionDocumentFile
+			);
 			userMessageForAgent.content.unshift({
-				type: 'resource_link',
-				uri: `file//${this.sessionDocumentFile.path}`,
-				name: this.sessionDocumentFile.name,
-				mimeType:
-					ExtensionToMime[this.sessionDocumentFile.extension] ?? 'text/plain',
-				size: this.sessionDocumentFile.stat.size,
-				text: `Current document: ${this.sessionDocumentFile.path}\n\n${text}`,
+				type: 'resource',
+				resource: {
+					uri: documentUri,
+					mimeType:
+						ExtensionToMime[this.sessionDocumentFile.extension] ??
+						'text/plain',
+					text: documentContent,
+				},
 			});
 		}
 
@@ -1113,10 +1125,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		if (chunk.type === 'display_error') {
-			this.displayMessage({
-				role: 'system',
-				content: [{ type: 'text', text: chunk.message }],
-			});
+			this.displayNotification(chunk.message);
 			return;
 		}
 
@@ -1332,6 +1341,32 @@ export class ChatView extends ItemView implements ChatInterface {
 			chevron.classList.toggle('is-expanded', expanded);
 		});
 
+		this.scrollToBottom();
+	}
+
+	/**
+	 * Display a transient, dismissible notification without adding a chat message.
+	 */
+	private displayNotification(message: string): void {
+		const notification = this.messagesContainer.createDiv(
+			'acp-chat-notification'
+		);
+		notification.setAttribute('role', 'status');
+		notification.setAttribute('aria-live', 'polite');
+
+		notification.createSpan({
+			cls: 'acp-chat-notification-message',
+			text: message,
+		});
+		const dismissButton = notification.createEl('button', {
+			cls: 'acp-chat-notification-dismiss',
+			attr: {
+				type: 'button',
+				'aria-label': 'Dismiss notification',
+			},
+			text: '×',
+		});
+		dismissButton.addEventListener('click', () => notification.remove());
 		this.scrollToBottom();
 	}
 
