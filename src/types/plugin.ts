@@ -83,6 +83,11 @@ export interface AgentConfig {
 	args: string[];
 	workingDirectory?: string;
 	environment?: Record<string, string>;
+	/**
+	 * Regex (case-insensitive). Agents/modes whose id or name matches are
+	 * hidden from the chat selector.
+	 */
+	modeFilter?: string;
 	enabled: boolean;
 }
 
