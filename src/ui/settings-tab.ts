@@ -9,6 +9,7 @@ import {
 
 import type ACPChatPlugin from '../../main';
 import { AgentConfig, DEFAULT_SETTINGS } from '../types/plugin';
+import { validateModeFilter } from '../utils/mode-filter';
 import { ObsidianFileOperationsHandler } from '../core/obsidian-file-operations';
 import { isAbsolutePath } from '../utils/external-paths';
 
@@ -1096,6 +1097,7 @@ class AgentConfigModal extends Modal {
 	private argsInput: HTMLInputElement;
 	private workingDirInput: HTMLInputElement;
 	private environmentInput: HTMLTextAreaElement;
+	private modeFilterInput: HTMLInputElement;
 
 	constructor(
 		app: App,
@@ -1168,6 +1170,18 @@ class AgentConfigModal extends Modal {
 				this.workingDirInput = text.inputEl;
 			});
 
+		// Agent/mode filter
+		new Setting(contentEl)
+			.setName('Agent Filter')
+			.setDesc(
+				'Regular expression (case-insensitive) matched against the id or name of the agents returned by the server. Matching agents are hidden from the chat selector. Leave empty to show all.'
+			)
+			.addText((text) => {
+				text.setPlaceholder('^(kiro_planner|test-.*)$');
+				text.setValue(this.agent?.modeFilter || '');
+				this.modeFilterInput = text.inputEl;
+			});
+
 		// Environment Variables
 		new Setting(contentEl)
 			.setName('Environment Variables')
@@ -1226,6 +1240,13 @@ class AgentConfigModal extends Modal {
 			return;
 		}
 
+		const modeFilter = this.modeFilterInput.value.trim() || undefined;
+		const modeFilterError = validateModeFilter(modeFilter);
+		if (modeFilterError) {
+			alert(`Invalid agent filter: ${modeFilterError}`);
+			return;
+		}
+
 		// Parse arguments
 		const args = argsString ? argsString.split(/\s+/) : [];
 
@@ -1251,6 +1272,7 @@ class AgentConfigModal extends Modal {
 			workingDirectory,
 			environment:
 				Object.keys(environment).length > 0 ? environment : undefined,
+			modeFilter,
 			enabled: this.agent?.enabled ?? true,
 		};
 

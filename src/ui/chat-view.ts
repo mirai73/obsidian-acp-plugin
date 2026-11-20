@@ -28,6 +28,7 @@ import { ACPClientImpl } from '../core/acp-client-impl';
 import { SessionManagerImpl, SessionContext } from '../core/session-manager';
 import { ACPClient } from '../interfaces/acp-client';
 import { ExtensionToMime } from '../types/plugin';
+import { filterModes } from '../utils/mode-filter';
 import { SessionSummary } from '../interfaces/session-manager';
 
 export const CHAT_VIEW_TYPE = 'acp-chat-view';
@@ -963,7 +964,9 @@ export class ChatView extends ItemView implements ChatInterface {
 						content: [
 							{
 								type: 'text',
-								text: `Available modes: ${this.availableModes.map((m) => m.id).join(', ')}`,
+								text: `Available modes: ${this.getVisibleModes()
+									.map((m) => m.id)
+									.join(', ')}`,
 							},
 						],
 					});
@@ -2139,19 +2142,41 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 	}
 
+	private getAgentModeFilter(agentId?: string | null): string | undefined {
+		if (!agentId) return undefined;
+		const settings =
+			(this.app as any).plugins?.plugins?.['acp-chat-assistant']?.settings ||
+			(this.app as any).plugins?.getPlugin?.('acp-chat-assistant')?.settings;
+		return (
+			settings?.agents?.find((a: any) => a.id === agentId)?.modeFilter ||
+			undefined
+		);
+	}
+
+	/** Modes returned by the agent, narrowed by the agent's configured filter */
+	private getVisibleModes(): any[] {
+		return filterModes(
+			this.availableModes,
+			this.getAgentModeFilter(this.currentAgentId),
+			this.currentModeId
+		);
+	}
+
 	private updateModeSelector(): void {
 		if (!this.modeSelector) return;
 
 		this.modeSelector.empty();
 
-		if (this.availableModes.length === 0) {
+		const visibleModes = this.getVisibleModes();
+
+		if (visibleModes.length === 0) {
 			this.modeSelector.style.display = 'none';
 			return;
 		}
 
 		this.modeSelector.style.display = 'block';
 
-		this.availableModes.forEach((mode) => {
+		visibleModes.forEach((mode) => {
 			const option = this.modeSelector?.createEl('option', {
 				text: mode.name,
 				value: mode.id,
@@ -2181,7 +2206,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	}
 
 	async setMode(modeId: string): Promise<void> {
-		const mode = this.availableModes.find(
+		const mode = this.getVisibleModes().find(
 			(m) => m.id === modeId || m.name.toLowerCase() === modeId.toLowerCase()
 		);
 		if (mode) {
@@ -2195,7 +2220,9 @@ export class ChatView extends ItemView implements ChatInterface {
 				content: [
 					{
 						type: 'text',
-						text: `Unknown mode: ${modeId}. Available modes: ${this.availableModes.map((m) => m.id).join(', ')}`,
+						text: `Unknown mode: ${modeId}. Available modes: ${this.getVisibleModes()
+							.map((m) => m.id)
+							.join(', ')}`,
 					},
 				],
 			});

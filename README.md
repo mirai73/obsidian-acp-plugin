@@ -20,6 +20,7 @@ You can register multiple local agents to connect to Obsidian via ACP. Provide t
 
 - Enable/disable each agent on the fly.
 - Provide environment variables or working directories for the agent run environment.
+- **Agent Filter**: Hide agents (modes) returned by the ACP server from the chat input selector, next to the model dropdown. It takes a case-insensitive regular expression matched against each agent's id or name. Any agent that matches is not shown, e.g. `^(kiro_planner|test-.*)$`. Leave it empty to show all agents. The active agent always stays visible.
 
 ### 2. Permissions
 
