@@ -197,6 +197,7 @@ body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  position: relative;
   gap: var(--size-4-2);
   padding: var(--size-4-2);
   overflow: hidden;
@@ -204,6 +205,7 @@ body {
 }
 
 .acp-messages-container {
+  position: relative;
   flex: 1 1 0%;
   min-height: 0;
   overflow-y: auto;
@@ -939,13 +941,37 @@ body {
   margin: 4px 0;
   padding: var(--size-2-2) var(--size-2-3);
   color: var(--text-normal);
-  background: var(--acp-chat-system-bg);
-  border: 1px solid var(--acp-glass-border);
-  border-left: 3px solid var(--acp-warning-color);
+  background: rgba(255, 193, 7, 0.5) !important;
+  background-color: rgba(255, 193, 7, 0.5) !important;
+  border: 1px solid rgba(255, 193, 7, 0.75);
   border-radius: var(--acp-radius-medium);
   font-size: 0.9em;
   line-height: var(--line-height-normal);
   box-shadow: var(--acp-shadow-light);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.acp-chat-notifications {
+  position: absolute;
+  top: var(--size-4-2);
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  width: min(420px, calc(100% - var(--size-4-4)));
+  max-height: 50%;
+  overflow-y: auto;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.acp-chat-notifications .acp-chat-notification {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  pointer-events: auto;
 }
 
 .acp-chat-notification-message {

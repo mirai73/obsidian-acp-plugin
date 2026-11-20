@@ -40,6 +40,7 @@ interface QueuedMessage {
 
 export class ChatView extends ItemView implements ChatInterface {
 	private messagesContainer: HTMLElement;
+	private notificationsContainer: HTMLElement;
 	private inputContainer: HTMLElement;
 	private inputField: HTMLTextAreaElement;
 	private sendButton: HTMLButtonElement;
@@ -402,6 +403,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Messages container with scrolling
 		this.messagesContainer = chatWrapper.createDiv('acp-messages-container');
 		this.messagesContainer.addClass('acp-scrollable');
+		this.notificationsContainer = this.messagesContainer.createDiv(
+			'acp-chat-notifications'
+		);
 
 		// Clean input container
 		this.inputContainer = chatWrapper.createDiv('acp-input-container');
@@ -1348,7 +1352,7 @@ export class ChatView extends ItemView implements ChatInterface {
 	 * Display a transient, dismissible notification without adding a chat message.
 	 */
 	private displayNotification(message: string): void {
-		const notification = this.messagesContainer.createDiv(
+		const notification = this.notificationsContainer.createDiv(
 			'acp-chat-notification'
 		);
 		notification.setAttribute('role', 'status');
@@ -1367,7 +1371,6 @@ export class ChatView extends ItemView implements ChatInterface {
 			text: '×',
 		});
 		dismissButton.addEventListener('click', () => notification.remove());
-		this.scrollToBottom();
 	}
 
 	/**
