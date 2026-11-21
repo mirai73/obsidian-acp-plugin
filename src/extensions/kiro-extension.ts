@@ -57,7 +57,7 @@ const toolsCommand: ExtensionCommand = {
 					label: tool.name,
 					description: tool.description,
 					badge: tool.disabled
-						? { text: 'disabled', tone: 'muted' as const }
+						? { text: 'disabled', tone: 'muted' as const, icon: 'ban' }
 						: undefined,
 				})),
 			});
@@ -81,6 +81,12 @@ const STATUS_TONE: Record<string, PanelTone> = {
 	connected: 'success',
 	connecting: 'warning',
 	failed: 'error',
+};
+
+const STATUS_ICON: Record<string, string> = {
+	connected: 'check-circle',
+	connecting: 'loader',
+	failed: 'x-circle',
 };
 
 const mcpCommand: ExtensionCommand = {
@@ -186,10 +192,12 @@ const mcpCommand: ExtensionCommand = {
 							badge: {
 								text: server.status,
 								tone: STATUS_TONE[server.status] ?? 'muted',
+								icon: STATUS_ICON[server.status] ?? 'circle',
 							},
 							action: server.failedAuthorization
 								? {
 										label: 'Sign in',
+										icon: 'log-in',
 										command: `/mcp auth ${server.name}`,
 									}
 								: undefined,

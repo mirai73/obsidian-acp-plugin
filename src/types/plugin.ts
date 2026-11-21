@@ -107,6 +107,8 @@ export interface UIConfig {
 	showTimestamps: boolean;
 	enableMarkdown: boolean;
 	showFileOperationNotifications: boolean;
+	/** How long agent error notices stay visible; 0 keeps them until clicked. Default 30. */
+	errorNoticeSeconds?: number;
 	respectSystemTheme: boolean;
 	customColors?: {
 		primary?: string;

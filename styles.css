@@ -943,11 +943,75 @@ body {
   border: 1px solid var(--color-orange);
 }
 
+.notice .acp-notice-action {
+  display: block;
+  margin-top: var(--size-2-2);
+}
+
 .notice.acp-notice-info {
   border: 1px solid var(--interactive-accent);
 }
 
-/* Pending message card: a message queued while the agent is working */
+/* Small icon-only buttons shared by the pending card and command panel */
+.acp-icon-button {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.acp-icon-button:hover {
+  color: var(--text-normal);
+}
+
+.acp-icon-button .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Cards above the input: a titled header band on a contrasting body */
+.acp-card {
+  display: flex;
+  flex-direction: column;
+  margin: var(--size-2-2) var(--size-4-2);
+  overflow: hidden;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  font-size: var(--font-ui-smaller);
+}
+
+.acp-card-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 var(--size-2-3) 0 var(--size-4-2);
+  background: var(--background-modifier-hover);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.acp-card-title {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+.acp-card-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: var(--size-2-1) var(--size-4-2);
+}
+
+/* Pending message card: messages queued while the agent is working */
 .acp-pending-container:empty {
   display: none;
 }
@@ -957,15 +1021,9 @@ body {
 }
 
 .acp-pending-card {
-  margin: var(--size-2-2) var(--size-4-2);
-  padding: var(--size-2-1) var(--size-2-3);
   max-height: 25vh;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  background: var(--background-secondary);
-  border: 1px dashed var(--interactive-accent);
-  border-radius: var(--radius-m);
-  font-size: var(--font-ui-smaller);
+  border-style: dashed;
+  border-color: var(--interactive-accent);
 }
 
 .acp-pending-row {
@@ -983,29 +1041,6 @@ body {
   text-overflow: ellipsis;
 }
 
-.acp-pending-action {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-}
-
-.acp-pending-action:hover {
-  color: var(--text-normal);
-}
-
-.acp-pending-action .svg-icon {
-  width: 14px;
-  height: 14px;
-}
-
 /* Command panel: structured output of client-implemented slash commands */
 .acp-command-panel-container {
   flex: 0 0 auto;
@@ -1017,76 +1052,45 @@ body {
 
 .acp-command-panel {
   flex: 0 0 auto;
-  margin: var(--size-4-1) var(--size-4-2);
-  padding: var(--size-4-2);
   max-height: 40vh;
-  overflow-y: auto;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  font-size: var(--font-ui-small);
-}
-
-.acp-command-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--size-4-1);
-}
-
-.acp-command-panel-title {
-  font-weight: var(--font-semibold);
-}
-
-.acp-command-panel-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  min-width: 0;
-  height: 24px;
-  min-height: 0;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  line-height: 1;
-}
-
-.acp-command-panel-close:hover {
-  color: var(--text-normal);
 }
 
 .acp-command-panel-heading {
-  margin: var(--size-4-2) 0 var(--size-2-1);
+  margin: var(--size-2-2) 0 var(--size-2-1);
   color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.acp-command-panel-item {
+.acp-command-panel-item,
+.acp-command-panel-message {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--size-2-2);
-  padding: var(--size-2-1) 0;
+  min-height: 24px;
+}
+
+.acp-command-panel-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.acp-command-panel-icon .svg-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .acp-command-panel-label {
+  flex: 0 0 auto;
   font-family: var(--font-monospace);
 }
 
-.acp-command-panel-action {
-  height: auto;
-  min-height: 0;
-  padding: 0 var(--size-4-2);
-  font-size: var(--font-ui-smaller);
-}
-
 .acp-command-panel-description {
-  flex-basis: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--text-muted);
 }
 
@@ -1098,7 +1102,6 @@ body {
   padding: 0 var(--size-2-3);
   border-radius: var(--radius-s);
   background: var(--background-modifier-hover);
-  font-size: var(--font-ui-smaller);
 }
 
 .acp-command-panel .acp-tone-success {

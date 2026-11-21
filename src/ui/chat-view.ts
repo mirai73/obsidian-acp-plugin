@@ -959,29 +959,40 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (!this.commandPanelContainer) return;
 		this.closeCommandPanel();
 
-		const el = this.commandPanelContainer.createDiv('acp-command-panel');
+		const el = this.commandPanelContainer.createDiv(
+			'acp-card acp-command-panel'
+		);
 		el.setAttribute('role', 'region');
 		el.setAttribute('aria-label', panel.title);
 		el.tabIndex = -1;
 
-		const header = el.createDiv('acp-command-panel-header');
-		header.createSpan({ cls: 'acp-command-panel-title', text: panel.title });
+		const header = el.createDiv('acp-card-header');
+		header.createSpan({ cls: 'acp-card-title', text: panel.title });
 		const close = header.createEl('button', {
-			cls: 'acp-command-panel-close',
-			text: '×',
+			cls: 'clickable-icon acp-icon-button',
 			attr: { type: 'button', 'aria-label': 'Close' },
 		});
+		setIcon(close, 'x');
 		close.addEventListener('click', () => this.closeCommandPanel());
 		el.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') this.closeCommandPanel();
 		});
 
-		const body = el.createDiv('acp-command-panel-body');
+		const toneIcons = {
+			success: 'check-circle',
+			warning: 'alert-triangle',
+			error: 'alert-circle',
+			muted: 'info',
+		};
+
+		const body = el.createDiv('acp-card-body');
 		if (panel.message) {
-			body.createDiv({
-				cls: `acp-command-panel-message acp-tone-${panel.message.tone ?? 'muted'}`,
-				text: panel.message.text,
-			});
+			const tone = panel.message.tone ?? 'muted';
+			const message = body.createDiv(
+				`acp-command-panel-message acp-tone-${tone}`
+			);
+			setIcon(message.createSpan('acp-command-panel-icon'), toneIcons[tone]);
+			message.createSpan({ text: panel.message.text });
 		}
 		for (const section of panel.sections ?? []) {
 			const sectionEl = body.createDiv('acp-command-panel-section');
@@ -999,20 +1010,33 @@ export class ChatView extends ItemView implements ChatInterface {
 			}
 			for (const item of section.items) {
 				const row = sectionEl.createDiv('acp-command-panel-item');
+				if (item.badge?.icon) {
+					const status = row.createSpan({
+						cls: `acp-command-panel-icon acp-tone-${item.badge.tone ?? 'muted'}`,
+						attr: { 'aria-label': item.badge.text, title: item.badge.text },
+					});
+					setIcon(status, item.badge.icon);
+				}
 				row.createSpan({ cls: 'acp-command-panel-label', text: item.label });
-				if (item.badge) {
+				if (item.badge && !item.badge.icon) {
 					row.createSpan({
 						cls: `acp-command-panel-badge acp-tone-${item.badge.tone ?? 'muted'}`,
 						text: item.badge.text,
 					});
 				}
+				row.createSpan({
+					cls: 'acp-command-panel-description',
+					text: item.description ?? '',
+					attr: item.description ? { title: item.description } : {},
+				});
 				if (item.action) {
-					const { label, command } = item.action;
+					const { label, command, icon } = item.action;
 					const button = row.createEl('button', {
-						cls: 'acp-command-panel-action',
-						text: label,
-						attr: { type: 'button' },
+						cls: 'clickable-icon acp-icon-button',
+						attr: { type: 'button', 'aria-label': label },
 					});
+					if (icon) setIcon(button, icon);
+					else button.setText(label);
 					button.addEventListener('click', () => {
 						const sessionId = this.currentSessionId;
 						if (sessionId) {
@@ -1022,12 +1046,6 @@ export class ChatView extends ItemView implements ChatInterface {
 								command
 							);
 						}
-					});
-				}
-				if (item.description) {
-					row.createDiv({
-						cls: 'acp-command-panel-description',
-						text: item.description,
 					});
 				}
 			}
@@ -1109,9 +1127,15 @@ export class ChatView extends ItemView implements ChatInterface {
 		const pending = this.messageQueue;
 		if (pending.length === 0) return;
 
-		const card = this.pendingContainer.createDiv('acp-pending-card');
-		card.setAttribute('role', 'region');
-		card.setAttribute('aria-label', 'Pending messages');
+		const root = this.pendingContainer.createDiv('acp-card acp-pending-card');
+		root.setAttribute('role', 'region');
+		root.setAttribute('aria-label', 'Pending messages');
+		const header = root.createDiv('acp-card-header');
+		header.createSpan({
+			cls: 'acp-card-title',
+			text: `Pending messages (${pending.length})`,
+		});
+		const card = root.createDiv('acp-card-body');
 
 		for (const message of pending) {
 			const row = card.createDiv('acp-pending-row');
@@ -1130,14 +1154,14 @@ export class ChatView extends ItemView implements ChatInterface {
 
 			// Same icon as the main send button
 			const sendNow = row.createEl('button', {
-				cls: 'clickable-icon acp-pending-action',
+				cls: 'clickable-icon acp-icon-button',
 				attr: { type: 'button', 'aria-label': 'Send now' },
 			});
 			setIcon(sendNow, 'arrow-right');
 			sendNow.addEventListener('click', () => this.sendPendingNow(message));
 
 			const discard = row.createEl('button', {
-				cls: 'clickable-icon acp-pending-action',
+				cls: 'clickable-icon acp-icon-button',
 				attr: { type: 'button', 'aria-label': 'Discard' },
 			});
 			setIcon(discard, 'x');
@@ -1372,7 +1396,18 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		if (chunk.type === 'display_error') {
-			this.displayNotification(chunk.message);
+			// Kiro reports MCP connection/authorization failures with this error type;
+			// the /mcp command (a Kiro extension command) shows status and sign-in.
+			const hasMcpPanel =
+				chunk.errorType === 'mcp_connection_error' &&
+				this.agentCommands.some((c) => c.extension && c.name === '/mcp');
+			this.displayNotification(
+				chunk.message,
+				'error',
+				hasMcpPanel
+					? { label: 'Open MCP panel', run: () => this.openMcpPanel(sessionId) }
+					: undefined
+			);
 			return;
 		}
 
@@ -1596,12 +1631,33 @@ export class ChatView extends ItemView implements ChatInterface {
 	 */
 	private displayNotification(
 		message: string,
-		severity: 'error' | 'warning' | 'info' = 'error'
+		severity: 'error' | 'warning' | 'info' = 'error',
+		action?: { label: string; run: () => void }
 	): void {
-		const notice = new Notice(message, 10000);
+		let content: string | DocumentFragment = message;
+		let notice: Notice | undefined;
+		if (action) {
+			content = document.createDocumentFragment();
+			content.createSpan({ text: message });
+			const button = content.createEl('button', {
+				text: action.label,
+				cls: 'acp-notice-action',
+				attr: { type: 'button' },
+			});
+			button.addEventListener('click', () => {
+				action.run();
+				notice?.hide();
+			});
+		}
+		const seconds = this.getSettings()?.ui?.errorNoticeSeconds ?? 30;
+		notice = new Notice(content, Math.max(0, seconds) * 1000);
 		// Notice has no severity option; tag its element so styles.css can color it.
 		const el = notice?.containerEl ?? notice?.noticeEl;
 		el?.addClass('acp-notice', `acp-notice-${severity}`);
+	}
+
+	private openMcpPanel(sessionId: string): void {
+		void this.runExtensionCommand(sessionId, '/mcp', '/mcp');
 	}
 
 	/**

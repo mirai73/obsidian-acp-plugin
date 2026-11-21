@@ -12,9 +12,10 @@ export type PanelTone = 'success' | 'warning' | 'error' | 'muted';
 export interface PanelItem {
 	label: string;
 	description?: string;
-	badge?: { text: string; tone?: PanelTone };
-	/** Button that runs a slash command (e.g. "/mcp auth figma") when clicked. */
-	action?: { label: string; command: string };
+	/** Status shown as an icon (Obsidian icon name) with `text` as its tooltip; text badge if no icon. */
+	badge?: { text: string; tone?: PanelTone; icon?: string };
+	/** Icon button (Obsidian icon name) that runs a slash command (e.g. "/mcp auth figma"). */
+	action?: { label: string; command: string; icon?: string };
 }
 
 export interface PanelSection {

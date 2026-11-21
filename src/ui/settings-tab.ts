@@ -540,8 +540,7 @@ export class ACPChatSettingTab extends PluginSettingTab {
 	private renderAbsolutePathsSetting(setting: Setting): void {
 		setting.addTextArea((text) => {
 			text.setValue(
-				this.plugin.settings.permissions?.absoluteAllowedPaths?.join('\n') ||
-					''
+				this.plugin.settings.permissions?.absoluteAllowedPaths?.join('\n') || ''
 			);
 			text.setPlaceholder(
 				'One absolute path per line\nExample:\n/Users/me/projects/notes\n/tmp/output.txt'
@@ -838,6 +837,27 @@ export class ACPChatSettingTab extends PluginSettingTab {
 								this.plugin.settings.ui = DEFAULT_SETTINGS.ui!;
 							}
 							this.plugin.settings.ui.showFileOperationNotifications = value;
+							await this.plugin.saveSettings();
+						})
+				)
+		);
+
+		group.addSetting((setting) =>
+			setting
+				.setName('Error notification duration')
+				.setDesc(
+					'Seconds an agent error notification stays visible. 0 keeps it until you click it.'
+				)
+				.addSlider((slider) =>
+					slider
+						.setLimits(0, 120, 5)
+						.setValue(this.plugin.settings.ui?.errorNoticeSeconds ?? 30)
+						.setDynamicTooltip()
+						.onChange(async (value) => {
+							if (!this.plugin.settings.ui) {
+								this.plugin.settings.ui = DEFAULT_SETTINGS.ui!;
+							}
+							this.plugin.settings.ui.errorNoticeSeconds = value;
 							await this.plugin.saveSettings();
 						})
 				)

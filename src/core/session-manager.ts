@@ -662,6 +662,9 @@ export class SessionManagerImpl implements SessionManager {
 				this.options.onStreamingChunk(sessionId, {
 					type: 'display_error',
 					message: update._meta.kiro.message,
+					errorType:
+						update._meta.kiro.displayError?.errorType ??
+						update._meta.kiro.errorType,
 				});
 			}
 		} else if (update && update.sessionUpdate === 'session_info_update') {
