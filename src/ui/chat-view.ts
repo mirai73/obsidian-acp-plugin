@@ -37,6 +37,8 @@ export const CHAT_VIEW_TYPE = 'acp-chat-view';
 interface QueuedMessage {
 	text: string;
 	agentMessage: Message;
+	/** What the conversation shows once the message is actually sent. */
+	userMessageForUI: Message;
 	selectionContext?: { text: string; from: number; to: number } | null;
 }
 
@@ -114,7 +116,7 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.sessionQueues.set(this.currentSessionId, queue);
 		}
 	}
-	private queueIndicator: HTMLElement | null = null;
+	private pendingContainer: HTMLElement | null = null;
 	private metadataBar: HTMLElement | null = null;
 	private isRestoringSession = false;
 
@@ -411,6 +413,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		this.commandPanelContainer = chatWrapper.createDiv(
 			'acp-command-panel-container'
 		);
+		this.pendingContainer = chatWrapper.createDiv('acp-pending-container');
 
 		// Clean input container
 		this.inputContainer = chatWrapper.createDiv('acp-input-container');
@@ -504,12 +507,11 @@ export class ChatView extends ItemView implements ChatInterface {
 	private setupEventListeners(): void {
 		// Send button click
 		this.sendButton.addEventListener('click', () => {
-			if (this.isProcessing && this.messageQueue.length === 0) {
-				// Cancel mode: only cancel when processing with empty queue (Req 2.1)
+			if (this.isProcessing) {
+				// Stop also drops the pending message, putting its text back in the input.
 				if (this.currentSessionId && this.sessionManager) {
-					this.cancelPendingPermissions();
-					this.sessionManager.cancelSession(this.currentSessionId);
-					this.finalizeStreamingMessage();
+					this.discardPendingMessages();
+					this.cancelCurrentTurn();
 					this.isProcessing = false;
 				}
 			} else {
@@ -793,14 +795,14 @@ export class ChatView extends ItemView implements ChatInterface {
 		}
 
 		if (this.isProcessing || this.messageQueue.length > 0) {
-			// Enqueue the message for later dispatch
+			// Pending messages show in the pending card, not in the conversation,
+			// until they are sent.
 			this.messageQueue.push({
 				text,
 				agentMessage: userMessageForAgent,
+				userMessageForUI,
 				selectionContext,
 			});
-			if (selectionContext) this.displaySelectionContext(selectionContext);
-			this.displayMessage(userMessageForUI);
 			this.updateQueueIndicator();
 			this.updateDocumentContextBox();
 			return;
@@ -1014,7 +1016,11 @@ export class ChatView extends ItemView implements ChatInterface {
 					button.addEventListener('click', () => {
 						const sessionId = this.currentSessionId;
 						if (sessionId) {
-							void this.runExtensionCommand(sessionId, command.split(' ')[0], command);
+							void this.runExtensionCommand(
+								sessionId,
+								command.split(' ')[0],
+								command
+							);
 						}
 					});
 				}
@@ -1041,23 +1047,103 @@ export class ChatView extends ItemView implements ChatInterface {
 			const next = queue.shift()!;
 			if (sessionId === this.currentSessionId) {
 				this.updateQueueIndicator();
+				if (next.selectionContext) {
+					this.displaySelectionContext(next.selectionContext);
+				}
+				this.displayMessage(next.userMessageForUI);
+				this.updateDocumentContextBox();
 			}
 			this.dispatchTurn(sessionId, next.text, next.agentMessage);
 		}
 	}
 
-	private updateQueueIndicator(): void {
-		if (!this.queueIndicator) {
-			this.queueIndicator = this.inputContainer.createDiv(
-				'acp-queue-indicator'
-			);
-		}
+	/** Cancel the running turn (and any permission prompts waiting on the user). */
+	private cancelCurrentTurn(): void {
+		if (!this.currentSessionId || !this.sessionManager) return;
+		this.cancelPendingPermissions();
+		this.sessionManager.cancelSession(this.currentSessionId);
+		this.finalizeStreamingMessage();
+	}
 
-		if (this.messageQueue.length > 0) {
-			this.queueIndicator.textContent = `${this.messageQueue.length} pending`;
-			this.queueIndicator.style.display = 'block';
+	/** Drop every pending message of the current session, restoring their text to an empty input. */
+	private discardPendingMessages(): void {
+		const dropped = this.messageQueue.splice(0);
+		if (dropped.length > 0 && !this.inputField.value.trim()) {
+			this.inputField.value = dropped.map((m) => m.text).join('\n\n');
+			this.autoResizeTextarea();
+		}
+		this.updateQueueIndicator();
+	}
+
+	private removePendingMessage(message: QueuedMessage): void {
+		const queue = this.messageQueue;
+		const index = queue.indexOf(message);
+		if (index >= 0) queue.splice(index, 1);
+		this.updateQueueIndicator();
+	}
+
+	/**
+	 * Send a pending message right away, interrupting the running turn. Older pending
+	 * messages are discarded; newer ones stay queued behind it.
+	 */
+	private sendPendingNow(message: QueuedMessage): void {
+		const sessionId = this.currentSessionId;
+		const queue = this.messageQueue;
+		const index = queue.indexOf(message);
+		if (!sessionId || index < 0) return;
+
+		queue.splice(0, index);
+		if (this.isProcessing) {
+			// The cancelled turn's cleanup dispatches the first queued message.
+			this.cancelCurrentTurn();
 		} else {
-			this.queueIndicator.style.display = 'none';
+			this.dequeueAndDispatch(sessionId);
+		}
+	}
+
+	/** Render pending messages as one compact card above the input (not in the conversation). */
+	private updateQueueIndicator(): void {
+		if (!this.pendingContainer) return;
+		this.pendingContainer.empty();
+
+		const pending = this.messageQueue;
+		if (pending.length === 0) return;
+
+		const card = this.pendingContainer.createDiv('acp-pending-card');
+		card.setAttribute('role', 'region');
+		card.setAttribute('aria-label', 'Pending messages');
+
+		for (const message of pending) {
+			const row = card.createDiv('acp-pending-row');
+
+			const images = message.userMessageForUI.content.filter(
+				(b) => b.type === 'image'
+			).length;
+			const preview = [message.text, images > 0 ? `[${images} image(s)]` : '']
+				.filter(Boolean)
+				.join(' ');
+			row.createSpan({
+				cls: 'acp-pending-text',
+				text: preview,
+				attr: { title: preview },
+			});
+
+			// Same icon as the main send button
+			const sendNow = row.createEl('button', {
+				cls: 'clickable-icon acp-pending-action',
+				attr: { type: 'button', 'aria-label': 'Send now' },
+			});
+			setIcon(sendNow, 'arrow-right');
+			sendNow.addEventListener('click', () => this.sendPendingNow(message));
+
+			const discard = row.createEl('button', {
+				cls: 'clickable-icon acp-pending-action',
+				attr: { type: 'button', 'aria-label': 'Discard' },
+			});
+			setIcon(discard, 'x');
+			discard.addEventListener('click', () =>
+				this.removePendingMessage(message)
+			);
 		}
 	}
 
@@ -2073,14 +2159,15 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.isRestoringSession ||
 			(!this.isProcessing && isInputEmpty);
 
-		// Show cancel icon only when processing with empty queue (Req 2.1, 2.2)
-		const isCancelMode = this.isProcessing && this.messageQueue.length === 0;
-		setIcon(this.sendButton, isCancelMode ? 'square' : 'arrow-right');
+		// Stay in stop mode for the whole turn, even with a message pending
+		setIcon(this.sendButton, this.isProcessing ? 'square' : 'arrow-right');
 
 		if (isDisconnected) {
 			this.inputField.placeholder = 'Connect to an AI assistant';
 		} else if (this.isRestoringSession) {
 			this.inputField.placeholder = 'Restoring conversation...';
+		} else if (this.isProcessing) {
+			this.inputField.placeholder = 'Press Enter to queue a message...';
 		} else {
 			this.inputField.placeholder = 'Type your message here...';
 		}

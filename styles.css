@@ -947,6 +947,65 @@ body {
   border: 1px solid var(--interactive-accent);
 }
 
+/* Pending message card: a message queued while the agent is working */
+.acp-pending-container:empty {
+  display: none;
+}
+
+.acp-pending-container {
+  flex: 0 0 auto;
+}
+
+.acp-pending-card {
+  margin: var(--size-2-2) var(--size-4-2);
+  padding: var(--size-2-1) var(--size-2-3);
+  max-height: 25vh;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  background: var(--background-secondary);
+  border: 1px dashed var(--interactive-accent);
+  border-radius: var(--radius-m);
+  font-size: var(--font-ui-smaller);
+}
+
+.acp-pending-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  min-height: 24px;
+}
+
+.acp-pending-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.acp-pending-action {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.acp-pending-action:hover {
+  color: var(--text-normal);
+}
+
+.acp-pending-action .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
 /* Command panel: structured output of client-implemented slash commands */
 .acp-command-panel-container {
   flex: 0 0 auto;
