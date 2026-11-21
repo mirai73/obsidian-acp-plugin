@@ -25,6 +25,7 @@ import {
 } from '../types/acp';
 import { ChatInterface } from '../interfaces/chat-interface';
 import { ACPClientImpl } from '../core/acp-client-impl';
+import type { CommandPanel } from '../extensions';
 import { SessionManagerImpl, SessionContext } from '../core/session-manager';
 import { ACPClient } from '../interfaces/acp-client';
 import { ExtensionToMime } from '../types/plugin';
@@ -41,7 +42,6 @@ interface QueuedMessage {
 
 export class ChatView extends ItemView implements ChatInterface {
 	private messagesContainer: HTMLElement;
-	private notificationsContainer: HTMLElement;
 	private inputContainer: HTMLElement;
 	private inputField: HTMLTextAreaElement;
 	private sendButton: HTMLButtonElement;
@@ -73,6 +73,8 @@ export class ChatView extends ItemView implements ChatInterface {
 		SessionRequestPermissionParams
 	>();
 	private acpClient: ACPClientImpl | null = null;
+	private commandPanelContainer: HTMLElement | null = null;
+	private commandPanelTimer: number | null = null;
 	private sessionManager: SessionManagerImpl | null = null;
 	private currentSessionId: string | null = null;
 	private availableModes: any[] = [];
@@ -319,6 +321,7 @@ export class ChatView extends ItemView implements ChatInterface {
 							description: c.description,
 							name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 							local: c.meta?.local || false,
+							extension: c.meta?.extension || false,
 						}));
 					} else {
 						this.agentCommands = [];
@@ -404,8 +407,9 @@ export class ChatView extends ItemView implements ChatInterface {
 		// Messages container with scrolling
 		this.messagesContainer = chatWrapper.createDiv('acp-messages-container');
 		this.messagesContainer.addClass('acp-scrollable');
-		this.notificationsContainer = this.messagesContainer.createDiv(
-			'acp-chat-notifications'
+
+		this.commandPanelContainer = chatWrapper.createDiv(
+			'acp-command-panel-container'
 		);
 
 		// Clean input container
@@ -658,6 +662,23 @@ export class ChatView extends ItemView implements ChatInterface {
 			return;
 		}
 
+		// Client-implemented commands (e.g. /mcp) bypass the chat history and the turn queue
+		const firstWord = text.split(/\s/)[0].toLowerCase();
+		const extensionCommand = this.agentCommands.find(
+			(cmd) => cmd.extension && cmd.name.toLowerCase() === firstWord
+		);
+		if (extensionCommand && this.pastedImages.length === 0) {
+			this.inputField.value = '';
+			this.autoResizeTextarea();
+			await this.ensureSession();
+			await this.runExtensionCommand(
+				this.currentSessionId!,
+				extensionCommand.name,
+				text
+			);
+			return;
+		}
+
 		const images = [...this.pastedImages];
 		this.pastedImages = [];
 
@@ -727,8 +748,7 @@ export class ChatView extends ItemView implements ChatInterface {
 				resource: {
 					uri: documentUri,
 					mimeType:
-						ExtensionToMime[this.sessionDocumentFile.extension] ??
-						'text/plain',
+						ExtensionToMime[this.sessionDocumentFile.extension] ?? 'text/plain',
 					text: documentContent,
 				},
 			});
@@ -879,6 +899,139 @@ export class ChatView extends ItemView implements ChatInterface {
 				this.updateInputState();
 			}
 			this.dequeueAndDispatch(sessionId);
+		}
+	}
+
+	/**
+	 * Run a client-implemented command (e.g. /tools) and show its output in the
+	 * command panel. It is not added to the chat history or sent to the agent.
+	 */
+	private async runExtensionCommand(
+		sessionId: string,
+		command: string,
+		text: string
+	): Promise<void> {
+		let panel: CommandPanel;
+		try {
+			const agentId = this.sessionManager?.getSessionInfo(sessionId)?.agentId;
+			const args = text.slice(command.length).trim();
+			const result =
+				agentId && this.acpClient
+					? await this.acpClient.runExtensionCommand(
+							agentId,
+							sessionId,
+							command.slice(1),
+							args
+						)
+					: null;
+			panel = result ?? {
+				title: command,
+				message: { text: 'Command is not available.', tone: 'warning' },
+				autoCloseMs: 4000,
+			};
+		} catch (error: any) {
+			panel = {
+				title: command,
+				message: { text: error?.message ?? String(error), tone: 'error' },
+			};
+		}
+
+		if (sessionId === this.currentSessionId) {
+			this.showCommandPanel(panel);
+		}
+	}
+
+	private closeCommandPanel(): void {
+		if (this.commandPanelTimer !== null) {
+			window.clearTimeout(this.commandPanelTimer);
+			this.commandPanelTimer = null;
+		}
+		this.commandPanelContainer?.empty();
+	}
+
+	/**
+	 * Show structured command output in a panel above the input. Replaces any open
+	 * panel; closes on the × button, Escape, or after `autoCloseMs`.
+	 */
+	private showCommandPanel(panel: CommandPanel): void {
+		if (!this.commandPanelContainer) return;
+		this.closeCommandPanel();
+
+		const el = this.commandPanelContainer.createDiv('acp-command-panel');
+		el.setAttribute('role', 'region');
+		el.setAttribute('aria-label', panel.title);
+		el.tabIndex = -1;
+
+		const header = el.createDiv('acp-command-panel-header');
+		header.createSpan({ cls: 'acp-command-panel-title', text: panel.title });
+		const close = header.createEl('button', {
+			cls: 'acp-command-panel-close',
+			text: '×',
+			attr: { type: 'button', 'aria-label': 'Close' },
+		});
+		close.addEventListener('click', () => this.closeCommandPanel());
+		el.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') this.closeCommandPanel();
+		});
+
+		const body = el.createDiv('acp-command-panel-body');
+		if (panel.message) {
+			body.createDiv({
+				cls: `acp-command-panel-message acp-tone-${panel.message.tone ?? 'muted'}`,
+				text: panel.message.text,
+			});
+		}
+		for (const section of panel.sections ?? []) {
+			const sectionEl = body.createDiv('acp-command-panel-section');
+			if (section.heading) {
+				sectionEl.createDiv({
+					cls: 'acp-command-panel-heading',
+					text: section.heading,
+				});
+			}
+			if (section.items.length === 0 && section.empty) {
+				sectionEl.createDiv({
+					cls: 'acp-command-panel-empty',
+					text: section.empty,
+				});
+			}
+			for (const item of section.items) {
+				const row = sectionEl.createDiv('acp-command-panel-item');
+				row.createSpan({ cls: 'acp-command-panel-label', text: item.label });
+				if (item.badge) {
+					row.createSpan({
+						cls: `acp-command-panel-badge acp-tone-${item.badge.tone ?? 'muted'}`,
+						text: item.badge.text,
+					});
+				}
+				if (item.action) {
+					const { label, command } = item.action;
+					const button = row.createEl('button', {
+						cls: 'acp-command-panel-action',
+						text: label,
+						attr: { type: 'button' },
+					});
+					button.addEventListener('click', () => {
+						const sessionId = this.currentSessionId;
+						if (sessionId) {
+							void this.runExtensionCommand(sessionId, command.split(' ')[0], command);
+						}
+					});
+				}
+				if (item.description) {
+					row.createDiv({
+						cls: 'acp-command-panel-description',
+						text: item.description,
+					});
+				}
+			}
+		}
+
+		if (panel.autoCloseMs) {
+			this.commandPanelTimer = window.setTimeout(
+				() => this.closeCommandPanel(),
+				panel.autoCloseMs
+			);
 		}
 	}
 
@@ -1101,6 +1254,7 @@ export class ChatView extends ItemView implements ChatInterface {
 					name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 					input: c.input,
 					local: c.meta?.local || false,
+					extension: c.meta?.extension || false,
 				};
 			});
 			return;
@@ -1352,28 +1506,16 @@ export class ChatView extends ItemView implements ChatInterface {
 	}
 
 	/**
-	 * Display a transient, dismissible notification without adding a chat message.
+	 * Show an agent-reported error as a standard Obsidian notice.
 	 */
-	private displayNotification(message: string): void {
-		const notification = this.notificationsContainer.createDiv(
-			'acp-chat-notification'
-		);
-		notification.setAttribute('role', 'status');
-		notification.setAttribute('aria-live', 'polite');
-
-		notification.createSpan({
-			cls: 'acp-chat-notification-message',
-			text: message,
-		});
-		const dismissButton = notification.createEl('button', {
-			cls: 'acp-chat-notification-dismiss',
-			attr: {
-				type: 'button',
-				'aria-label': 'Dismiss notification',
-			},
-			text: '×',
-		});
-		dismissButton.addEventListener('click', () => notification.remove());
+	private displayNotification(
+		message: string,
+		severity: 'error' | 'warning' | 'info' = 'error'
+	): void {
+		const notice = new Notice(message, 10000);
+		// Notice has no severity option; tag its element so styles.css can color it.
+		const el = notice?.containerEl ?? notice?.noticeEl;
+		el?.addClass('acp-notice', `acp-notice-${severity}`);
 	}
 
 	/**
@@ -2800,6 +2942,7 @@ export class ChatView extends ItemView implements ChatInterface {
 		if (streamingEl) {
 			streamingEl.remove();
 		}
+		this.closeCommandPanel();
 		this.agentCommands = [];
 		this.messagesContainer.empty();
 		if (this.metadataBar) {
@@ -2936,12 +3079,14 @@ export class ChatView extends ItemView implements ChatInterface {
 			this.updateModeSelector();
 		}
 
+		this.closeCommandPanel();
 		if (session.availableCommands) {
 			this.agentCommands = session.availableCommands.map((c: any) => ({
 				description: c.description,
 				name: c.name.startsWith('/') ? c.name : `/${c.name}`,
 				input: c.input,
 				local: c.meta?.local || false,
+				extension: c.meta?.extension || false,
 			}));
 		} else {
 			this.agentCommands = [];

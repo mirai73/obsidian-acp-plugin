@@ -31,6 +31,11 @@ import {
 } from '../types/acp';
 import { logger } from './logging-system';
 import { builtinExtensions } from '../extensions';
+import type {
+	AgentExtensionContext,
+	CommandPanel,
+	ExtensionCommand,
+} from '../extensions';
 
 export interface ACPClientOptions {
 	healthCheckInterval?: number;
@@ -63,6 +68,14 @@ export interface AgentConnection {
 export class ACPClientImpl extends EventEmitter implements ACPClient {
 	private processManager: AgentProcessManager;
 	private connections = new Map<string, AgentConnection>();
+	private permissionDecisions = new Map<
+		string,
+		Promise<SessionRequestPermissionResult>
+	>();
+	private extensionCommands = new Map<
+		string,
+		Array<{ command: ExtensionCommand; ctx: AgentExtensionContext }>
+	>();
 	private options: Required<ACPClientOptions>;
 	private fileOperationsHandler?: FileOperationsHandlerImpl;
 	private acpFileSystemHandlers?: ACPFileSystemHandlers;
@@ -253,6 +266,16 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 			throw new Error('No agent connection available for initialization');
 		}
 
+		const extensionMeta: Record<string, unknown> = {};
+		for (const extension of builtinExtensions) {
+			if (
+				extension.matches(connection.config) &&
+				extension.clientCapabilities
+			) {
+				extensionMeta[extension.id] = extension.clientCapabilities;
+			}
+		}
+
 		const params: InitializeParams = {
 			protocolVersion: 1, // Current ACP protocol version
 			clientCapabilities: {
@@ -260,6 +283,7 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 					readTextFile: true,
 					writeTextFile: true,
 				},
+				...(Object.keys(extensionMeta).length > 0 && { _meta: extensionMeta }),
 			},
 			clientInfo: {
 				name: 'obsidian-acp-chat',
@@ -761,6 +785,98 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 	}
 
 	/**
+	 * Ask the user once for permission requests an extension groups together
+	 * (e.g. the consent rounds of one compound shell command) and reuse that answer.
+	 */
+	private async requestPermissionOncePerGroup(
+		config: AgentConfig,
+		params: SessionRequestPermissionParams
+	): Promise<SessionRequestPermissionResult> {
+		const key = builtinExtensions
+			.filter((e) => e.matches(config))
+			.map((e) => e.permissionGroupKey?.(params))
+			.find((k) => k !== undefined);
+		if (key === undefined) {
+			return this.handleSessionRequestPermission(params);
+		}
+
+		const earlier = this.permissionDecisions.get(key);
+		if (earlier) {
+			const prior = await earlier.catch(() => undefined);
+			if (prior?.outcome.outcome === 'cancelled') return prior;
+			if (
+				prior?.outcome.outcome === 'selected' &&
+				params.options.some((o) => o.optionId === prior.outcome.optionId)
+			) {
+				return prior;
+			}
+		}
+
+		const decision = this.handleSessionRequestPermission(params);
+		if (!earlier) {
+			this.permissionDecisions.set(key, decision);
+			const forget = setTimeout(
+				() => this.permissionDecisions.delete(key),
+				5 * 60 * 1000
+			);
+			(forget as any).unref?.();
+			decision.catch(() => this.permissionDecisions.delete(key));
+		}
+		return decision;
+	}
+
+	/**
+	 * Append client-implemented extension commands to the agent's command list.
+	 */
+	private withExtensionCommands(
+		params: SessionUpdateParams,
+		commands: ExtensionCommand[]
+	): SessionUpdateParams {
+		const update = (params as any)?.update;
+		if (
+			commands.length === 0 ||
+			update?.sessionUpdate !== 'available_commands_update'
+		) {
+			return params;
+		}
+		const own = new Set(commands.map((c) => c.name));
+		const agentCommands = (update.availableCommands ?? []).filter(
+			(c: any) => !own.has(c.name)
+		);
+		return {
+			...params,
+			update: {
+				...update,
+				availableCommands: [
+					...agentCommands,
+					...commands.map((c) => ({
+						name: c.name,
+						description: c.description,
+						input: c.hint ? { hint: c.hint } : undefined,
+						meta: { extension: true },
+					})),
+				],
+			},
+		} as SessionUpdateParams;
+	}
+
+	/**
+	 * Run a client-implemented extension command. Returns null if the agent has no such command.
+	 */
+	async runExtensionCommand(
+		agentId: string,
+		sessionId: string,
+		name: string,
+		args: string
+	): Promise<CommandPanel | null> {
+		const entry = this.extensionCommands
+			.get(agentId)
+			?.find((e) => e.command.name === name);
+		if (!entry) return null;
+		return entry.command.run(args, sessionId, entry.ctx);
+	}
+
+	/**
 	 * Register JSON-RPC method handlers for a client
 	 */
 	private registerMethodHandlers(
@@ -795,7 +911,7 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 			'session/request_permission',
 			async (params) => {
 				try {
-					return await this.handleSessionRequestPermission(params);
+					return await this.requestPermissionOncePerGroup(config, params);
 				} catch (error) {
 					throw new JsonRpcError(
 						-32603,
@@ -805,17 +921,30 @@ export class ACPClientImpl extends EventEmitter implements ACPClient {
 			}
 		);
 
-		// Register notification handlers
-		jsonRpcClient.registerNotification('session/update', (params) => {
-			this.handleSessionUpdate(params);
-		});
-
 		const ctx = {
 			emitSessionUpdate: (sessionId: string, update: Record<string, any>) =>
 				this.handleSessionUpdate({ sessionId, update } as SessionUpdateParams),
+			request: (method: string, params: Record<string, any>) =>
+				jsonRpcClient.sendRequest(method, params),
 		};
-		for (const extension of builtinExtensions) {
-			if (!extension.matches(config)) continue;
+		const extensions = builtinExtensions.filter((e) => e.matches(config));
+		const commands = extensions.flatMap((e) => e.commands ?? []);
+		this.extensionCommands.set(
+			config.id,
+			commands.map((command) => ({ command, ctx }))
+		);
+
+		// Register notification handlers
+		jsonRpcClient.registerNotification('session/update', (params) => {
+			this.handleSessionUpdate(this.withExtensionCommands(params, commands));
+		});
+
+		for (const extension of extensions) {
+			for (const [method, handler] of Object.entries(
+				extension.requests ?? {}
+			)) {
+				jsonRpcClient.registerMethod(method, (params) => handler(params, ctx));
+			}
 			for (const [method, handler] of Object.entries(extension.notifications)) {
 				jsonRpcClient.registerNotification(method, (params) =>
 					handler(params, ctx)

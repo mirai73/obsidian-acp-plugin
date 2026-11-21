@@ -12,6 +12,7 @@ export interface InitializeParams {
 			writeTextFile?: boolean;
 		};
 		terminal?: boolean;
+		_meta?: Record<string, unknown>;
 	};
 	clientInfo?: {
 		name: string;
@@ -284,4 +285,6 @@ export interface AcpCommand {
 	description: string;
 	input?: any;
 	local?: boolean;
+	/** Implemented by the client through an agent extension; never sent to the agent. */
+	extension?: boolean;
 }
